@@ -78,4 +78,20 @@ describe("Auth (e2e)", () => {
 
 		expect(response.status).toBe(401);
 	});
+
+	it("keeps saving a Context key behind the session", async () => {
+		const response = await request(app.getHttpServer()).post(
+			"/api/trpc/settings.setResearchKey",
+		);
+
+		expect(response.status).toBe(401);
+	});
+
+	it("keeps skipping a Context key behind the same session", async () => {
+		const response = await request(app.getHttpServer()).post(
+			"/api/trpc/settings.skipResearchKey",
+		);
+
+		expect(response.status).toBe(401);
+	});
 });

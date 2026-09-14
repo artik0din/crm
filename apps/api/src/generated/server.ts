@@ -627,6 +627,9 @@ const appRouter = t.router({
       .input(setResearchKeyInput)
       .output(researchKeyOutput)
       .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as any),
+    skipResearchKey: publicProcedure
+      .output(researchKeyOutput)
+      .mutation(async () => "PLACEHOLDER_DO_NOT_REMOVE" as any),
     archiveRetention: publicProcedure
       .output(archiveRetentionOutput)
       .query(async () => "PLACEHOLDER_DO_NOT_REMOVE" as any),

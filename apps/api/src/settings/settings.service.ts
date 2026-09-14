@@ -5,6 +5,8 @@ import {
 	readAgentModel,
 	readArchiveRetentionDays,
 	readContextDevKey,
+	readContextDevSkipped,
+	skipContextDev,
 	writeAgentModel,
 	writeArchiveRetentionDays,
 	writeContextDevKey,
@@ -86,9 +88,22 @@ export class SettingsService {
 	}
 
 	async researchKey(): Promise<ResearchKeySettings> {
-		const key = await readContextDevKey(this.db);
+		const [key, skipped] = await Promise.all([
+			readContextDevKey(this.db),
+			readContextDevSkipped(this.db),
+		]);
 
-		return { configured: key !== null, hint: key ? maskKey(key) : null };
+		return {
+			configured: key !== null,
+			skipped,
+			hint: key ? maskKey(key) : null,
+		};
+	}
+
+	async skipResearchKey(): Promise<ResearchKeySettings> {
+		await skipContextDev(this.db);
+		this.logger.log({ message: "Context key skipped" });
+		return this.researchKey();
 	}
 
 	async setResearchKey(apiKey: string): Promise<ResearchKeySettings> {
