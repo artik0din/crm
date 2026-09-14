@@ -1,5 +1,6 @@
 import {
 	auth,
+	GOOGLE_PROVIDER_ID,
 	type MailboxProviderId,
 	parseScopes,
 	type SignInAccount,
@@ -8,7 +9,6 @@ import { type Db } from "@crm/db";
 import { Injectable, Logger } from "@nestjs/common";
 import { InjectDatabase } from "../database/database.constants";
 import {
-	GOOGLE_PROVIDER_ID,
 	PROVIDER_FOR_SOURCE,
 	SCOPE_FOR_SOURCE,
 	type SyncSource,

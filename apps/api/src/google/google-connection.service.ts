@@ -1,4 +1,8 @@
-import { isGoogleConfigured, signsInWithGoogle } from "@crm/auth";
+import {
+	GOOGLE_PROVIDER_ID,
+	isGoogleConfigured,
+	signsInWithGoogle,
+} from "@crm/auth";
 import type { Db, Prisma } from "@crm/db";
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { normalizeDomain } from "../companies/domain";
@@ -8,7 +12,6 @@ import { MailboxMatchService } from "../mailbox/mailbox-match.service";
 import { MailboxTokenService } from "../mailbox/mailbox-token.service";
 import { SyncStateService } from "../mailbox/sync-state.service";
 import {
-	GOOGLE_PROVIDER_ID,
 	GOOGLE_SYNC_SOURCES,
 	type GoogleSyncSource,
 	SCOPE_FOR_SOURCE,

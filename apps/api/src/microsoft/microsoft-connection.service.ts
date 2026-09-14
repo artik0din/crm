@@ -1,4 +1,8 @@
-import { isMicrosoftConfigured, signsInWithMicrosoft } from "@crm/auth";
+import {
+	isMicrosoftConfigured,
+	MICROSOFT_PROVIDER_ID,
+	signsInWithMicrosoft,
+} from "@crm/auth";
 import type { Db, Prisma } from "@crm/db";
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { ActivityStampService } from "../crm/activity-stamp.service";
@@ -6,7 +10,6 @@ import { InjectDatabase } from "../database/database.constants";
 import { MailboxTokenService } from "../mailbox/mailbox-token.service";
 import { SyncStateService } from "../mailbox/sync-state.service";
 import {
-	MICROSOFT_PROVIDER_ID,
 	MICROSOFT_SYNC_SOURCES,
 	type MicrosoftSyncSource,
 	SCOPE_FOR_SOURCE,
