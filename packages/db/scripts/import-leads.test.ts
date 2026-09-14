@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { db } from "../src/client";
 import { type FieldDefinitionWithOptions, readValue } from "../src/fields";
@@ -173,6 +174,24 @@ describe("import-leads", () => {
 		expect(stats.fieldValuesWritten).toBe(0);
 	});
 
+	it("writes company fields when the domain is already cached", async () => {
+		const company = await db.company.findFirstOrThrow({
+			where: { domain: "acme-corp.example.test", archivedAt: null },
+		});
+		const field = await fieldByKey("COMPANY", "siren_site");
+		const row = await db.fieldValue.findFirst({
+			where: { fieldId: field.id, companyId: company.id },
+		});
+		expect(readValue(field, row ?? undefined)).toBe("987654321");
+	});
+
+	it("does not overwrite core contact fields on re-import", async () => {
+		const contact = await db.contact.findFirstOrThrow({
+			where: { email: "kate.dup@example.test", archivedAt: null },
+		});
+		expect(contact.lastName).toBe("Dup");
+	});
+
 	it("filters rows with --min-score", async () => {
 		const stats = await runImportLeads({
 			csvPath: fixture,
@@ -185,5 +204,71 @@ describe("import-leads", () => {
 		expect(stats.contactsCreated + stats.contactsUpdated).toBeLessThan(
 			stats.rowsParsed,
 		);
+	});
+
+	it("clears dynamic values when a CSV column is present but empty", async () => {
+		const engagementField = await fieldByKey("CONTACT", "engagement");
+		const clearFixture = join(
+			import.meta.dir,
+			"fixtures/leads-bob-clear-tags.csv",
+		);
+		await runImportLeads({
+			csvPath: clearFixture,
+			dryRun: false,
+			limit: null,
+			minScore: null,
+			segments: null,
+		});
+		const row = await db.fieldValue.findFirst({
+			where: {
+				fieldId: engagementField.id,
+				contact: { email: "bob.pack@example.test" },
+			},
+		});
+		expect(row).toBeNull();
+	});
+
+	it("stops when an import field has the wrong type", async () => {
+		const score = await fieldByKey("CONTACT", "score");
+		await db.fieldDefinition.update({
+			where: { id: score.id },
+			data: { type: "TEXT" },
+		});
+		await expect(
+			runImportLeads({
+				csvPath: fixture,
+				dryRun: false,
+				limit: 1,
+				minScore: null,
+				segments: null,
+			}),
+		).rejects.toThrow(/requires NUMBER/);
+		await db.fieldDefinition.update({
+			where: { id: score.id },
+			data: { type: "NUMBER" },
+		});
+	});
+
+	it("rejects weak self-host passwords in the guard script", () => {
+		const guard = join(
+			import.meta.dir,
+			"../../../deploy/selfhost-guard-env.sh",
+		);
+		const weak = spawnSync("sh", [guard], {
+			env: {
+				...process.env,
+				POSTGRES_PASSWORD: "CHANGE_ME",
+				REDIS_PASSWORD: "aaaaaaaaaaaaaaaaaaaaaaaa",
+			},
+		});
+		expect(weak.status).not.toBe(0);
+		const ok = spawnSync("sh", [guard], {
+			env: {
+				...process.env,
+				POSTGRES_PASSWORD: "aaaaaaaaaaaaaaaaaaaaaaaa",
+				REDIS_PASSWORD: "bbbbbbbbbbbbbbbbbbbbbbbb",
+			},
+		});
+		expect(ok.status).toBe(0);
 	});
 });

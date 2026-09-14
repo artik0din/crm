@@ -1,0 +1,2 @@
+ID,E-mail,Prénom,Nom,Date de création,source_file,Étiquettes,email_norm,domaine,domaine_pro,tel_e164,tel_valide,tel_type,siren,siren_etat,siren_date_creation,siren_naf,siren_siege_dept,siren_siege_commune,nb_candidats,confiance,techno_site,siren_site,score
+1002,bob.pack@example.test,Bob,Pack,2024-02-01 11:00:00,Clients Pack Mindeo.csv,,bob.pack@example.test,,false,+33987654321,false,mobile,,,,,,,0,moyenne,,,-3
