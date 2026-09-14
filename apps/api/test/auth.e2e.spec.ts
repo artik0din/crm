@@ -80,17 +80,19 @@ describe("Auth (e2e)", () => {
 	});
 
 	it("keeps saving a Context key behind the session", async () => {
-		const response = await request(app.getHttpServer()).post(
-			"/api/trpc/settings.setResearchKey",
-		);
+		const response = await request(app.getHttpServer())
+			.post("/api/trpc/settings.setResearchKey")
+			.set("content-type", "application/json")
+			.send({ json: { apiKey: "ctx_live_abcdefgh" } });
 
 		expect(response.status).toBe(401);
 	});
 
 	it("keeps skipping a Context key behind the same session", async () => {
-		const response = await request(app.getHttpServer()).post(
-			"/api/trpc/settings.skipResearchKey",
-		);
+		const response = await request(app.getHttpServer())
+			.post("/api/trpc/settings.skipResearchKey")
+			.set("content-type", "application/json")
+			.send({});
 
 		expect(response.status).toBe(401);
 	});
