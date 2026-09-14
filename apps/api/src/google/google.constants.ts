@@ -1,9 +1,9 @@
-export {
-	CALENDAR_SCOPE,
-	GMAIL_SCOPE,
-	GOOGLE_PROVIDER_ID,
-	GOOGLE_SYNC_SOURCES,
-	type GoogleSyncSource,
-	SCOPE_FOR_SOURCE,
-	SYNC_SCOPES,
-} from "../mailbox/mailbox.constants";
+import { CALENDAR_SCOPE, GMAIL_SCOPE } from "@crm/auth";
+
+export const GOOGLE_SYNC_SOURCES = ["calendar", "gmail"] as const;
+export type GoogleSyncSource = (typeof GOOGLE_SYNC_SOURCES)[number];
+
+export const SCOPE_FOR_SOURCE = {
+	calendar: CALENDAR_SCOPE,
+	gmail: GMAIL_SCOPE,
+} satisfies Record<GoogleSyncSource, string>;
