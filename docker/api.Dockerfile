@@ -14,15 +14,27 @@ RUN DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crm bun install --
 FROM installer AS builder
 RUN DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crm bunx turbo run build --filter=api
 
+FROM installer AS migrator
+WORKDIR /app/packages/db
+CMD ["bun", "run", "db:deploy"]
+
+FROM oven/bun:1 AS production-deps
+WORKDIR /app
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/bun.lock ./bun.lock
+COPY --from=pruner /app/out/full/ .
+RUN DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crm bun install --frozen-lockfile --production --ignore-scripts
+
 FROM oven/bun:1 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3001
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
-COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=production-deps /app/node_modules ./node_modules
+COPY --from=production-deps /app/package.json ./package.json
+COPY --from=production-deps /app/apps/api/package.json ./apps/api/package.json
+COPY --from=production-deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
-COPY --from=builder /app/packages ./packages
+COPY --from=production-deps /app/packages ./packages
+COPY --from=builder /app/packages/db/src/generated ./packages/db/src/generated
 EXPOSE 3001
 CMD ["bun", "apps/api/dist/main.js"]

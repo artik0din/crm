@@ -28,7 +28,11 @@ services:
       - crm
 
   migrate:
-    image: crm-api:selfhost
+    image: crm-migrate:selfhost
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      target: migrator
     restart: "no"
     working_dir: /app/packages/db
     env_file: .env
