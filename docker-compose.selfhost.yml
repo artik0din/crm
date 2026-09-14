@@ -29,14 +29,12 @@ services:
 
   migrate:
     image: crm-api:selfhost
-    build:
-      context: .
-      dockerfile: docker/api.Dockerfile
     restart: "no"
+    working_dir: /app/packages/db
     env_file: .env
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/crm?schema=public
-    command: ["bunx", "prisma", "migrate", "deploy", "--config", "packages/db/prisma.config.ts"]
+    command: ["bun", "run", "db:deploy"]
     depends_on:
       postgres:
         condition: service_healthy
