@@ -16,9 +16,7 @@ export function isGoogleSyncSource(
 	return source === "calendar" || source === "gmail";
 }
 
-export function isMicrosoftSyncSource(
-	source: string,
-): source is "outlook" {
+export function isMicrosoftSyncSource(source: string): source is "outlook" {
 	return source === "outlook";
 }
 
