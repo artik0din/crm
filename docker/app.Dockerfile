@@ -8,13 +8,13 @@ FROM oven/bun:1 AS installer
 WORKDIR /app
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/bun.lock ./bun.lock
+COPY --from=pruner /app/out/full/ .
 RUN DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crm bun install --frozen-lockfile
 
 FROM installer AS builder
 WORKDIR /app
 ARG NEXT_PUBLIC_API_URL=http://localhost:3001
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-COPY --from=pruner /app/out/full/ .
 RUN DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crm BETTER_AUTH_SECRET=docker-build-placeholder-secret-32-chars ALLOWED_SIGN_IN=build@example.com bunx turbo run build --filter=app
 
 FROM node:22-bookworm-slim AS runner
