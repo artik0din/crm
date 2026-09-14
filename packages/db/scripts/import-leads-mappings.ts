@@ -47,22 +47,16 @@ export function dirigeantFromConfiance(confiance: string): string {
 	return "aucun";
 }
 
-export function sirenEtatOption(etat: string): string | null {
-	if (etat === "A") return "actif";
-	if (etat === "C") return "cesse";
-	return null;
-}
-
-export function siteEtatOption(etat: string): string | null {
-	if (etat === "actif" || etat === "cesse") return etat;
-	return null;
+export function etatOption(etat: string): string | null {
+	const normalized = etat.trim().toUpperCase();
+	if (normalized === "A" || normalized === "ACTIF") return "actif";
+	if (normalized === "C" || normalized === "CESSE") return "cesse";
+	return normalized || null;
 }
 
 export function telTypeOption(telType: string): string | null {
-	if (telType === "mobile" || telType === "fixe" || telType === "autre") {
-		return telType;
-	}
-	return null;
+	const normalized = telType.trim().toLowerCase();
+	return normalized || null;
 }
 
 export function companyNameFromDomain(domain: string): string {
@@ -98,7 +92,7 @@ export function contactFieldValues(
 
 	if (hasColumn(columns, "source_file")) {
 		values.segment = row.sourceFile.trim()
-			? segmentFromSourceFile(row.sourceFile)
+			? (segmentFromSourceFile(row.sourceFile) ?? row.sourceFile.trim())
 			: null;
 	}
 
@@ -117,7 +111,7 @@ export function contactFieldValues(
 	}
 
 	if (hasColumn(columns, "siren_etat")) {
-		values.siren_etat = sirenEtatOption(row.sirenEtat);
+		values.siren_etat = etatOption(row.sirenEtat);
 	}
 
 	if (hasColumn(columns, "siren_naf")) {
@@ -171,7 +165,7 @@ export function contactFieldValues(
 	}
 
 	if (hasColumn(columns, "site_etat")) {
-		values.site_etat = siteEtatOption(row.siteEtat);
+		values.site_etat = etatOption(row.siteEtat);
 	}
 
 	if (hasColumn(columns, "site_siege_dept")) {

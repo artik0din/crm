@@ -1,7 +1,7 @@
 import "@crm/env/load";
 
 import { type Db, db } from "../src/client";
-import { RecordSource } from "../src/generated/prisma/enums";
+import { FieldEntity, RecordSource } from "../src/generated/prisma/enums";
 import {
 	type CsvColumnSet,
 	type LeadRow,
@@ -9,7 +9,9 @@ import {
 } from "./import-leads-csv";
 import {
 	ensureImportFields,
+	IMPORT_FIELD_KEYS,
 	type ImportFieldSets,
+	unknownSelectOptions,
 	writeCompanyValues,
 	writeContactValues,
 } from "./import-leads-fields";
@@ -39,7 +41,9 @@ export type ImportStats = {
 	contactsUpdated: number;
 	companiesCreated: number;
 	companiesUpdated: number;
-	fieldValuesWritten: number;
+	fieldValuesUpserted: number;
+	fieldValuesCleared: number;
+	rejectedUnknownOption: Record<string, number>;
 	rejected: Record<ImportRejectReason, number>;
 	durationMs: number;
 };
@@ -50,10 +54,33 @@ export type ImportLeadsOptions = {
 	limit: number | null;
 	minScore: number | null;
 	segments: Set<SegmentKey> | null;
+	fields?: Set<string> | null;
 	client?: Db;
 };
 
 const BATCH = 1000;
+
+function addFieldWriteStats(
+	stats: ImportStats,
+	written: Awaited<ReturnType<typeof writeContactValues>>,
+): void {
+	stats.fieldValuesUpserted += written.upserted;
+	stats.fieldValuesCleared += written.cleared;
+	for (const [key, count] of Object.entries(written.rejectedUnknownOption)) {
+		stats.rejectedUnknownOption[key] =
+			(stats.rejectedUnknownOption[key] ?? 0) + count;
+	}
+}
+
+function addUnknownOptionStats(
+	stats: ImportStats,
+	rejected: Record<string, number>,
+): void {
+	for (const [key, count] of Object.entries(rejected)) {
+		stats.rejectedUnknownOption[key] =
+			(stats.rejectedUnknownOption[key] ?? 0) + count;
+	}
+}
 
 function parseArgs(argv: string[]): ImportLeadsOptions {
 	let csvPath: string | null = null;
@@ -61,6 +88,7 @@ function parseArgs(argv: string[]): ImportLeadsOptions {
 	let limit: number | null = null;
 	let minScore: number | null = null;
 	let segments: Set<SegmentKey> | null = null;
+	let fields: Set<string> | null = null;
 
 	for (let index = 0; index < argv.length; index++) {
 		const arg = argv[index];
@@ -97,6 +125,21 @@ function parseArgs(argv: string[]): ImportLeadsOptions {
 			index++;
 			continue;
 		}
+		if (arg === "--fields") {
+			const next = argv[index + 1];
+			if (!next) throw new Error("--fields requires a comma-separated list.");
+			fields = new Set(
+				next
+					.split(",")
+					.map((part) => part.trim())
+					.filter(Boolean),
+			);
+			if (fields.size === 0) {
+				throw new Error("--fields requires at least one field key.");
+			}
+			index++;
+			continue;
+		}
 		if (!arg.startsWith("-") && !csvPath) {
 			csvPath = arg;
 		}
@@ -104,11 +147,30 @@ function parseArgs(argv: string[]): ImportLeadsOptions {
 
 	if (!csvPath) {
 		throw new Error(
-			"Usage: bun packages/db/scripts/import-leads.ts <csv> [--dry-run] [--limit N] [--min-score N] [--segments a,b]",
+			"Usage: bun packages/db/scripts/import-leads.ts <csv> [--dry-run] [--limit N] [--min-score N] [--segments a,b] [--fields k1,k2]",
 		);
 	}
 
-	return { csvPath, dryRun, limit, minScore, segments };
+	return { csvPath, dryRun, limit, minScore, segments, fields };
+}
+
+function validateSelectedFields(fields: ReadonlySet<string> | null): void {
+	if (!fields) return;
+	const known = new Set<string>(IMPORT_FIELD_KEYS);
+	const unknown = [...fields].filter((key) => !known.has(key)).sort();
+	if (unknown.length > 0) {
+		throw new Error(`Unknown import field key(s): ${unknown.join(", ")}.`);
+	}
+}
+
+function selectFieldValues(
+	values: ImportFieldValueMap,
+	fields: ReadonlySet<string> | null,
+): ImportFieldValueMap {
+	if (!fields) return values;
+	return Object.fromEntries(
+		Object.entries(values).filter(([key]) => fields.has(key)),
+	);
 }
 
 function emptyRejected() {
@@ -157,19 +219,18 @@ async function writeCompanyFieldsForDomain(
 	companyFieldState: Map<string, ImportFieldValueMap>,
 	stats: ImportStats,
 	domain: string,
+	fields: ReadonlySet<string> | null,
 ): Promise<void> {
-	const rowValues = companyFieldValues(row, columns);
+	const rowValues = selectFieldValues(companyFieldValues(row, columns), fields);
 	const merged = mergeCompanyFieldValuesFirstWins(
 		companyFieldState.get(domain) ?? {},
 		rowValues,
 	);
 	companyFieldState.set(domain, merged);
 	const toWrite = companyFieldValuesToWrite(rowValues, merged);
-	stats.fieldValuesWritten += await writeCompanyValues(
-		client,
-		companyFields,
-		companyId,
-		toWrite,
+	addFieldWriteStats(
+		stats,
+		await writeCompanyValues(client, companyFields, companyId, toWrite),
 	);
 }
 
@@ -183,6 +244,7 @@ async function upsertCompany(
 	companyCache: Map<string, string>,
 	companyFieldState: Map<string, ImportFieldValueMap>,
 	dryRun: boolean,
+	fields: ReadonlySet<string> | null,
 ): Promise<string | null> {
 	const cached = companyCache.get(domain);
 	if (cached) {
@@ -196,6 +258,7 @@ async function upsertCompany(
 				companyFieldState,
 				stats,
 				domain,
+				fields,
 			);
 		}
 		return cached;
@@ -246,6 +309,7 @@ async function upsertCompany(
 			companyFieldState,
 			stats,
 			domain,
+			fields,
 		);
 	}
 
@@ -260,6 +324,7 @@ async function upsertContact(
 	contactFields: ImportFieldSets["contact"],
 	stats: ImportStats,
 	dryRun: boolean,
+	fields: ReadonlySet<string> | null,
 ): Promise<void> {
 	const incomingFirst =
 		nonEmpty(row.firstName) ?? localPartFromEmail(row.email);
@@ -317,12 +382,10 @@ async function upsertContact(
 	if (existing) stats.contactsUpdated++;
 	else stats.contactsCreated++;
 
-	const values = contactFieldValues(row, columns);
-	stats.fieldValuesWritten += await writeContactValues(
-		client,
-		contactFields,
-		contact.id,
-		values,
+	const values = selectFieldValues(contactFieldValues(row, columns), fields);
+	addFieldWriteStats(
+		stats,
+		await writeContactValues(client, contactFields, contact.id, values),
 	);
 }
 
@@ -331,6 +394,8 @@ export async function runImportLeads(
 ): Promise<ImportStats> {
 	const started = performance.now();
 	const client = options.client ?? db;
+	const selectedFields = options.fields ?? null;
+	validateSelectedFields(selectedFields);
 	const rejected = emptyRejected();
 	const stats: ImportStats = {
 		linesRead: 0,
@@ -339,7 +404,9 @@ export async function runImportLeads(
 		contactsUpdated: 0,
 		companiesCreated: 0,
 		companiesUpdated: 0,
-		fieldValuesWritten: 0,
+		fieldValuesUpserted: 0,
+		fieldValuesCleared: 0,
+		rejectedUnknownOption: {},
 		rejected,
 		durationMs: 0,
 	};
@@ -367,7 +434,11 @@ export async function runImportLeads(
 	let companyFields: ImportFieldSets["company"] = [];
 
 	if (!options.dryRun) {
-		const fieldSets = await ensureImportFields(client, technoSites);
+		const fieldSets = await ensureImportFields(
+			client,
+			technoSites,
+			selectedFields,
+		);
 		contactFields = fieldSets.contact;
 		companyFields = fieldSets.company;
 	}
@@ -375,6 +446,71 @@ export async function runImportLeads(
 	let processed = 0;
 	for (const row of rows) {
 		if (!shouldImportRow(row, options.minScore, options.segments, rejected)) {
+			continue;
+		}
+
+		if (options.dryRun) {
+			addUnknownOptionStats(
+				stats,
+				unknownSelectOptions(
+					FieldEntity.CONTACT,
+					selectFieldValues(contactFieldValues(row, columns), selectedFields),
+				),
+			);
+			if (row.domainPro && row.domain) {
+				addUnknownOptionStats(
+					stats,
+					unknownSelectOptions(
+						FieldEntity.COMPANY,
+						selectFieldValues(companyFieldValues(row, columns), selectedFields),
+					),
+				);
+			}
+		}
+
+		if (selectedFields) {
+			if (
+				!options.dryRun &&
+				row.domainPro &&
+				row.domain &&
+				companyFields.length > 0
+			) {
+				const company = await client.company.findFirst({
+					where: { domain: row.domain, archivedAt: null },
+					select: { id: true },
+				});
+				if (company) {
+					await writeCompanyFieldsForDomain(
+						client,
+						company.id,
+						companyFields,
+						row,
+						columns,
+						companyFieldState,
+						stats,
+						row.domain,
+						selectedFields,
+					);
+				}
+			}
+
+			if (!options.dryRun && contactFields.length > 0) {
+				const contact = await client.contact.findFirst({
+					where: { email: row.email, archivedAt: null },
+					select: { id: true },
+				});
+				if (contact) {
+					const values = selectFieldValues(
+						contactFieldValues(row, columns),
+						selectedFields,
+					);
+					addFieldWriteStats(
+						stats,
+						await writeContactValues(client, contactFields, contact.id, values),
+					);
+				}
+			}
+			processed++;
 			continue;
 		}
 
@@ -390,6 +526,7 @@ export async function runImportLeads(
 				companyCache,
 				companyFieldState,
 				options.dryRun,
+				null,
 			);
 		}
 
@@ -401,6 +538,7 @@ export async function runImportLeads(
 			contactFields,
 			stats,
 			options.dryRun,
+			null,
 		);
 		processed++;
 
@@ -425,12 +563,16 @@ export function formatImportStats(stats: ImportStats): string {
 		`contacts_updated: ${stats.contactsUpdated}`,
 		`companies_created: ${stats.companiesCreated}`,
 		`companies_updated: ${stats.companiesUpdated}`,
-		`field_values_written: ${stats.fieldValuesWritten}`,
+		`field_values_upserted: ${stats.fieldValuesUpserted}`,
+		`field_values_cleared: ${stats.fieldValuesCleared}`,
 		`rejected_missing_email: ${stats.rejected.missing_email}`,
 		`rejected_invalid_integer: ${stats.rejected.invalid_integer}`,
 		`rejected_invalid_date: ${stats.rejected.invalid_date}`,
 		`rejected_below_min_score: ${stats.rejected.below_min_score}`,
 		`rejected_segment_filtered: ${stats.rejected.segment_filtered}`,
+		...Object.entries(stats.rejectedUnknownOption)
+			.sort(([left], [right]) => left.localeCompare(right))
+			.map(([key, count]) => `rejected_unknown_option.${key}: ${count}`),
 		`duration_ms: ${stats.durationMs}`,
 	];
 	return lines.join("\n");

@@ -9,6 +9,7 @@ process.env.NODE_ENV = "test";
 
 const fixture = join(import.meta.dir, "fixtures/leads-sample.csv");
 const emailDomain = "@example.test";
+let initialStats: Awaited<ReturnType<typeof runImportLeads>>;
 
 async function cleanup(): Promise<void> {
 	const contacts = await db.contact.findMany({
@@ -53,7 +54,7 @@ async function fieldByKey(
 
 beforeAll(async () => {
 	await cleanup();
-	await runImportLeads({
+	initialStats = await runImportLeads({
 		csvPath: fixture,
 		dryRun: false,
 		limit: null,
@@ -124,6 +125,74 @@ describe("import-leads", () => {
 		expect(readValue(field, row ?? undefined)).toBe(-3);
 	});
 
+	it("maps site status codes and rejects unknown options", async () => {
+		const field = await fieldByKey("CONTACT", "site_etat");
+		const rows = await db.fieldValue.findMany({
+			where: {
+				fieldId: field.id,
+				contact: {
+					email: { in: ["alice.buyer@example.test", "bob.pack@example.test"] },
+				},
+			},
+			include: { option: true },
+		});
+		expect(rows.map((row) => row.option?.label).sort()).toEqual([
+			"actif",
+			"cesse",
+		]);
+		expect(initialStats.rejectedUnknownOption.site_etat).toBe(1);
+		expect(initialStats.fieldValuesCleared).toBe(0);
+	});
+
+	it("syncs only selected dynamic fields", async () => {
+		const contact = await db.contact.findFirstOrThrow({
+			where: { email: "alice.buyer@example.test", archivedAt: null },
+			select: { id: true, firstName: true },
+		});
+		await db.fieldValue.deleteMany({ where: { contactId: contact.id } });
+
+		const stats = await runImportLeads({
+			csvPath: fixture,
+			dryRun: false,
+			limit: 1,
+			minScore: null,
+			segments: null,
+			fields: new Set(["site_etat"]),
+		});
+		const values = await db.fieldValue.findMany({
+			where: { contactId: contact.id },
+			include: { field: true, option: true },
+		});
+		const unchanged = await db.contact.findUniqueOrThrow({
+			where: { id: contact.id },
+			select: { firstName: true },
+		});
+
+		expect(values).toHaveLength(1);
+		expect(values[0]?.field.key).toBe("site_etat");
+		expect(values[0]?.option?.label).toBe("actif");
+		expect(unchanged.firstName).toBe(contact.firstName);
+		expect(stats.contactsCreated).toBe(0);
+		expect(stats.contactsUpdated).toBe(0);
+		expect(stats.companiesCreated).toBe(0);
+		expect(stats.companiesUpdated).toBe(0);
+	});
+
+	it("rejects unknown field keys before writes", async () => {
+		const before = await db.fieldValue.count();
+		await expect(
+			runImportLeads({
+				csvPath: fixture,
+				dryRun: false,
+				limit: 1,
+				minScore: null,
+				segments: null,
+				fields: new Set(["unknown_field"]),
+			}),
+		).rejects.toThrow("Unknown import field key(s): unknown_field.");
+		expect(await db.fieldValue.count()).toBe(before);
+	});
+
 	it("is idempotent on a second run", async () => {
 		const contactsBefore = await db.contact.count({
 			where: { email: { endsWith: emailDomain }, archivedAt: null },
@@ -143,6 +212,11 @@ describe("import-leads", () => {
 		expect(contactsAfter).toBe(contactsBefore);
 		expect(second.contactsCreated).toBe(0);
 		expect(second.contactsUpdated).toBeGreaterThan(0);
+		expect(second.fieldValuesUpserted).toBe(initialStats.fieldValuesUpserted);
+		expect(second.fieldValuesCleared).toBe(initialStats.fieldValuesCleared);
+		expect(second.rejectedUnknownOption).toEqual(
+			initialStats.rejectedUnknownOption,
+		);
 	});
 
 	it("dry-run writes nothing", async () => {
@@ -171,7 +245,8 @@ describe("import-leads", () => {
 		expect(stats.contactsCreated + stats.contactsUpdated).toBeGreaterThan(0);
 		expect(contactsAfter).toBe(contactsBefore);
 		expect(fieldsAfter).toBe(fieldsBefore);
-		expect(stats.fieldValuesWritten).toBe(0);
+		expect(stats.fieldValuesUpserted).toBe(0);
+		expect(stats.fieldValuesCleared).toBe(0);
 	});
 
 	it("writes company fields when the domain is already cached", async () => {

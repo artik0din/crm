@@ -1,8 +1,8 @@
-ID,E-mail,Prénom,Nom,Date de création,source_file,Étiquettes,email_norm,domaine,domaine_pro,tel_e164,tel_valide,tel_type,siren,siren_etat,siren_date_creation,siren_naf,siren_siege_dept,siren_siege_commune,nb_candidats,confiance,techno_site,siren_site,score
-1001,alice.buyer@example.test,Alice,Acheteuse,2024-01-15 10:00:00,Business Pro - Purchase.csv,Engaged,alice.buyer@example.test,acme-corp.example.test,true,+33123456789,true,mobile,123456789,A,2020-01-01,6201Z,75,Paris,0,haute,WordPress,987654321,5
-1002,bob.pack@example.test,Bob,Pack,2024-02-01 11:00:00,Clients Pack Mindeo.csv,Engaged,bob.pack@example.test,,false,+33987654321,false,mobile,,,,,,,0,moyenne,,,-3
+ID,E-mail,Prénom,Nom,Date de création,source_file,Étiquettes,email_norm,domaine,domaine_pro,tel_e164,tel_valide,tel_type,siren,siren_etat,siren_date_creation,siren_naf,siren_siege_dept,siren_siege_commune,nb_candidats,confiance,techno_site,siren_site,score,site_etat
+1001,alice.buyer@example.test,Alice,Acheteuse,2024-01-15 10:00:00,Business Pro - Purchase.csv,Engaged,alice.buyer@example.test,acme-corp.example.test,true,+33123456789,true,mobile,123456789,A,2020-01-01,6201Z,75,Paris,0,haute,WordPress,987654321,5,A
+1002,bob.pack@example.test,Bob,Pack,2024-02-01 11:00:00,Clients Pack Mindeo.csv,Engaged,bob.pack@example.test,,false,+33987654321,false,mobile,,,,,,,0,moyenne,,,-3,C
 1003,,,SansMail,2024-03-01 12:00:00,Business Pro - Purchase.csv,,,false,,false,,,,,,,,0,,,1
-1004,local.only@example.test,,Localseul,2024-03-02 12:00:00,Business Pro - Membres Groupe Coaching.csv,Disengaged,local.only@example.test,,false,,false,,,,,,,,0,ambigu,,,2
+1004,local.only@example.test,,Localseul,2024-03-02 12:00:00,Business Pro - Membres Groupe Coaching.csv,Disengaged,local.only@example.test,,false,,false,,,,,,,,0,ambigu,,,2,INCONNU
 1005,carol.coach@example.test,Carol,Coach,2024-04-01 13:00:00,Business Pro - Membres Groupe Coaching.csv,Engaged,carol.coach@example.test,,false,+33111111111,true,fixe,,,,,,,0,,Drupal,,4
 1006,dan.actif3@example.test,Dan,Actif3,2024-05-01 14:00:00,Business Pro - Leads Actif -3 mois.csv,Engaged,dan.actif3@example.test,widgetco.example.test,true,+33222222222,true,mobile,111111111,A,,,,,0,,Shopify,111111111,3
 1007,eve.actif6@example.test,Eve,Actif6,2024-06-01 15:00:00,Business Pro - Leads Actif -6 mois.csv,,eve.actif6@example.test,,false,,false,autre,,,,,,,0,,,,1
@@ -12,7 +12,7 @@ ID,E-mail,Prénom,Nom,Date de création,source_file,Étiquettes,email_norm,domai
 1011,ida.pro@example.test,Ida,Pro,2024-10-01 19:00:00,Business Pro - Purchase.csv,Engaged,ida.pro@example.test,ida-pro.example.test,true,+33333333333,true,mobile,222222222,C,2019-06-15,5610A,69,Lyon,0,,Wix,222222222,8
 1012,jack.neutre@example.test,Jack,Neutre,2024-11-01 20:00:00,Business Pro - Purchase.csv,Newsletter,jack.neutre@example.test,,false,,false,,,,,,,,0,,,,7
 1013,kate.dup@example.test,Kate,Dup,2024-12-01 21:00:00,Business Pro - Purchase.csv,Engaged,kate.dup@example.test,,false,,false,,,,,,,,0,aucun_conf,,,3
-1014,kate.dup@example.test,Kate,DupUpdated,2025-01-01 22:00:00,Business Pro - Purchase.csv,Disengaged,kate.dup@example.test,,false,,false,,,,,,,,0,,,,3
+1014,kate.dup@example.test,Kate,DupUpdated,2025-01-01 22:00:00,Business Pro - Purchase.csv,Disengaged,kate.dup@example.test,,false,,false,,,,,,,,0,aucun_conf,,,3
 1015,leo.min@example.test,Leo,Min,2025-02-01 23:00:00,Business Pro - Purchase.csv,Engaged,leo.min@example.test,,false,,false,,,,,,,,0,,,,1
 1016,mia.min@example.test,Mia,Min,2025-03-01 00:00:00,Business Pro - Purchase.csv,Engaged,mia.min@example.test,,false,,false,,,,,,,,0,,,,2
 1017,nina.tech@example.test,Nina,Tech,2025-04-01 01:00:00,Business Pro - Purchase.csv,Engaged,nina.tech@example.test,techco.example.test,true,,false,,,,,,,,0,,WordPress,,9

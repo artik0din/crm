@@ -188,10 +188,53 @@ const COMPANY_SCALARS: ScalarFieldSpec[] = [
 	},
 ];
 
+export const IMPORT_FIELD_KEYS = [
+	...new Set(
+		[
+			...CONTACT_SELECTS,
+			...CONTACT_SCALARS,
+			...COMPANY_SELECTS,
+			...COMPANY_SCALARS,
+		].map((spec) => spec.key),
+	),
+] as const;
+
 export type ImportFieldSets = {
 	contact: FieldDefinitionWithOptions[];
 	company: FieldDefinitionWithOptions[];
 };
+
+export type FieldValueWriteStats = {
+	upserted: number;
+	cleared: number;
+	rejectedUnknownOption: Record<string, number>;
+};
+
+export function unknownSelectOptions(
+	entity: FieldEntity,
+	values: ImportFieldValueMap,
+): Record<string, number> {
+	const specs =
+		entity === FieldEntity.CONTACT ? CONTACT_SELECTS : COMPANY_SELECTS;
+	const byKey = new Map(specs.map((spec) => [spec.key, spec]));
+	const rejected: Record<string, number> = {};
+
+	for (const [key, value] of Object.entries(values)) {
+		const spec = byKey.get(key);
+		if (!spec || spec.options.length === 0 || value === null || value === "") {
+			continue;
+		}
+		if (
+			!spec.options.some(
+				(option) => option.toLowerCase() === String(value).toLowerCase(),
+			)
+		) {
+			rejected[key] = (rejected[key] ?? 0) + 1;
+		}
+	}
+
+	return rejected;
+}
 
 async function nextPosition(db: Db, entity: FieldEntity): Promise<number> {
 	const row = await db.fieldDefinition.findFirst({
@@ -317,6 +360,7 @@ async function ensureScalarField(
 export async function ensureImportFields(
 	db: Db,
 	siteTechnoValues: string[],
+	selectedKeys: ReadonlySet<string> | null = null,
 ): Promise<ImportFieldSets> {
 	const techno = [...new Set(siteTechnoValues.filter(Boolean))];
 
@@ -324,6 +368,7 @@ export async function ensureImportFields(
 	const contact: FieldDefinitionWithOptions[] = [];
 
 	for (const spec of CONTACT_SELECTS) {
+		if (selectedKeys && !selectedKeys.has(spec.key)) continue;
 		const extra = spec.key === "site_techno" ? techno : [];
 		contact.push(
 			await ensureSelectField(
@@ -338,6 +383,7 @@ export async function ensureImportFields(
 	}
 
 	for (const spec of CONTACT_SCALARS) {
+		if (selectedKeys && !selectedKeys.has(spec.key)) continue;
 		contact.push(
 			await ensureScalarField(db, FieldEntity.CONTACT, spec, contactPosition),
 		);
@@ -348,6 +394,7 @@ export async function ensureImportFields(
 	const company: FieldDefinitionWithOptions[] = [];
 
 	for (const spec of COMPANY_SELECTS) {
+		if (selectedKeys && !selectedKeys.has(spec.key)) continue;
 		company.push(
 			await ensureSelectField(
 				db,
@@ -361,6 +408,7 @@ export async function ensureImportFields(
 	}
 
 	for (const spec of COMPANY_SCALARS) {
+		if (selectedKeys && !selectedKeys.has(spec.key)) continue;
 		company.push(
 			await ensureScalarField(db, FieldEntity.COMPANY, spec, companyPosition),
 		);
@@ -375,11 +423,14 @@ export async function writeContactValues(
 	definitions: FieldDefinitionWithOptions[],
 	contactId: string,
 	values: ImportFieldValueMap,
-): Promise<number> {
-	const keys = Object.keys(values);
-	if (keys.length === 0) return 0;
-	await writeValues(db, FieldEntity.CONTACT, contactId, definitions, values);
-	return keys.length;
+): Promise<FieldValueWriteStats> {
+	return writeImportValues(
+		db,
+		FieldEntity.CONTACT,
+		contactId,
+		definitions,
+		values,
+	);
 }
 
 export async function writeCompanyValues(
@@ -387,9 +438,64 @@ export async function writeCompanyValues(
 	definitions: FieldDefinitionWithOptions[],
 	companyId: string,
 	values: ImportFieldValueMap,
-): Promise<number> {
-	const keys = Object.keys(values);
-	if (keys.length === 0) return 0;
-	await writeValues(db, FieldEntity.COMPANY, companyId, definitions, values);
-	return keys.length;
+): Promise<FieldValueWriteStats> {
+	return writeImportValues(
+		db,
+		FieldEntity.COMPANY,
+		companyId,
+		definitions,
+		values,
+	);
+}
+
+async function writeImportValues(
+	db: Db,
+	entity: FieldEntity,
+	recordId: string,
+	definitions: FieldDefinitionWithOptions[],
+	values: ImportFieldValueMap,
+): Promise<FieldValueWriteStats> {
+	const stats: FieldValueWriteStats = {
+		upserted: 0,
+		cleared: 0,
+		rejectedUnknownOption: {},
+	};
+	const byKey = new Map(
+		definitions.map((definition) => [definition.key, definition]),
+	);
+	const recordKey = entity === FieldEntity.CONTACT ? "contactId" : "companyId";
+
+	for (const [key, value] of Object.entries(values)) {
+		const definition = byKey.get(key);
+		if (!definition) {
+			throw new Error(`There is no import field called "${key}" on ${entity}.`);
+		}
+
+		if (value === null || value === "") {
+			const deleted = await db.fieldValue.deleteMany({
+				where: { fieldId: definition.id, [recordKey]: recordId },
+			});
+			stats.cleared += deleted.count;
+			continue;
+		}
+
+		if (
+			definition.type === FieldType.SELECT &&
+			!definition.options.some(
+				(option) =>
+					option.archivedAt === null &&
+					(option.id === value ||
+						option.label.toLowerCase() === String(value).toLowerCase()),
+			)
+		) {
+			stats.rejectedUnknownOption[key] =
+				(stats.rejectedUnknownOption[key] ?? 0) + 1;
+			continue;
+		}
+
+		await writeValues(db, entity, recordId, definitions, { [key]: value });
+		stats.upserted++;
+	}
+
+	return stats;
 }
