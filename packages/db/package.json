@@ -37,7 +37,7 @@
 		"db:seed": "bun scripts/require-local-db.ts db:seed && prisma db seed",
 		"db:studio": "prisma studio",
 		"db:test": "bun scripts/test-db.ts",
-		"test": "bun test",
+		"test": "bun test && sh ../../deploy/selfhost-guard-env.test.sh",
 		"dev:prepare": "bun scripts/prepare-dev.ts",
 		"lint": "biome check .",
 		"postinstall": "prisma generate",
