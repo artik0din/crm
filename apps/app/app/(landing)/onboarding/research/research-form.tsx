@@ -22,15 +22,26 @@ export function ResearchForm() {
 
 	const keyId = useId();
 
+	const leave = () => {
+		router.refresh();
+		router.replace("/");
+	};
+
 	const save = useMutation(
 		trpc.settings.setResearchKey.mutationOptions({
-			onSuccess: () => {
-				router.refresh();
-				router.replace("/");
-			},
+			onSuccess: leave,
 			onError: (error) => toast.error(error.message),
 		}),
 	);
+
+	const skip = useMutation(
+		trpc.settings.skipResearchKey.mutationOptions({
+			onSuccess: leave,
+			onError: (error) => toast.error(error.message),
+		}),
+	);
+
+	const busy = save.isPending || skip.isPending;
 
 	return (
 		<form
@@ -70,10 +81,24 @@ export function ResearchForm() {
 				</Field>
 			</FieldGroup>
 
-			<Button type="submit" disabled={save.isPending}>
-				{save.isPending ? <Spinner data-icon="inline-start" /> : null}
-				Continue
-			</Button>
+			<div className="flex flex-col gap-3">
+				<Button type="submit" disabled={busy}>
+					{save.isPending ? <Spinner data-icon="inline-start" /> : null}
+					Continue
+				</Button>
+				<Button
+					type="button"
+					variant="secondary"
+					disabled={busy}
+					onClick={() => skip.mutate()}
+				>
+					{skip.isPending ? <Spinner data-icon="inline-start" /> : null}
+					Continue without Context
+				</Button>
+				<FieldDescription>
+					Automatic research stays off. Add a key later in Settings → General.
+				</FieldDescription>
+			</div>
 		</form>
 	);
 }
