@@ -100,20 +100,31 @@ curl -I https://crm.payrolless.co/sign-in
 
 ## Import enriched leads
 
-Place the CSV outside the git tree. On the VPS:
+Place the CSV outside the git tree and outside the Docker build context. On the VPS:
 
 ```sh
-sudo install -d -m 700 /opt/crm/import
-sudo install -m 600 /path/to/leads_enrichis.csv /opt/crm/import/leads_enrichis.csv
+sudo install -d -m 700 /var/lib/crm-import
+sudo install -m 600 /path/to/leads_enrichis.csv /var/lib/crm-import/leads_enrichis.csv
 ```
 
-The Compose `tools` profile mounts `./import` read-only (use `/opt/crm/import` when the repo lives at `/opt/crm`).
+Keep the file mode `600`. The `tools` image runs as a non-root user, so the import must run as root and mount that directory read-only on `/leads`.
+
+Run `--dry-run` first. Then import. Then replay the same command. The replay must print the same counts.
 
 ```sh
-docker compose -f docker-compose.selfhost.yml --profile tools run --rm tools bun packages/db/scripts/import-leads.ts /import/leads_enrichis.csv --min-score 2
+cd /opt/crm
+docker compose -f docker-compose.selfhost.yml --profile tools run --rm -T --user root \
+  -v /var/lib/crm-import:/leads:ro \
+  tools bun packages/db/scripts/import-leads.ts /leads/leads_enrichis.csv --min-score 2 --dry-run
+docker compose -f docker-compose.selfhost.yml --profile tools run --rm -T --user root \
+  -v /var/lib/crm-import:/leads:ro \
+  tools bun packages/db/scripts/import-leads.ts /leads/leads_enrichis.csv --min-score 2
+docker compose -f docker-compose.selfhost.yml --profile tools run --rm -T --user root \
+  -v /var/lib/crm-import:/leads:ro \
+  tools bun packages/db/scripts/import-leads.ts /leads/leads_enrichis.csv --min-score 2
 ```
 
-The command prints counts only. Re-run it safely to refresh values without creating duplicates.
+The command prints counts only.
 
 ## Mailbox synchronization
 
@@ -151,7 +162,7 @@ docker compose -f docker-compose.selfhost.yml exec -T postgres pg_dump -U postgr
 ```
 
 Copy backups away from the VPS. Test restoration regularly on a separate database.
-Never store `.dump` files inside the git clone (`import/` and `*.dump` are ignored).
+Never store `.dump` files inside the git clone (`*.dump` is ignored).
 
 ## Not covered
 

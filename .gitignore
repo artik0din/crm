@@ -52,5 +52,4 @@ yarn-error.log*
 # Agent scratch files
 .scratch/
 
-import/
 *.dump
