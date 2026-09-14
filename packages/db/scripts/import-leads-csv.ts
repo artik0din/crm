@@ -165,7 +165,7 @@ export function parseLeadRow(
 			siteCategorieJuridique: cell(row, map, "site_categorie_juridique"),
 			siteNaf: cell(row, map, "site_naf"),
 			siteTrancheEffectif: cell(row, map, "site_tranche_effectif"),
-			siteEtat: cell(row, map, "site_etat").toLowerCase(),
+			siteEtat: cell(row, map, "site_etat").toUpperCase(),
 			siteSiegeDept: cell(row, map, "site_siege_dept"),
 		},
 	};
