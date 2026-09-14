@@ -79,8 +79,9 @@ request.
 - **An unreachable API fails open** (`unknown` lets the request through).
 - **`/sign-in`, `/grant-access`, `/eve` are ungated.** `/sign-in` is the only path a
   stranger may read; `/` joins it only when `IS_MARKETING` is set.
-- **There is no way past the key gate but to answer** — Skip stranded installs, every
-  later company sitting `PENDING` with nothing saying so.
+- **The key gate can be skipped.** "Continue without Context" settles the gate
+  without a key. Automatic brand and LinkedIn person research stay off until a
+  key is saved on Settings → General.
 
 ### The name is also the URL
 
