@@ -1,6 +1,6 @@
+import path from "node:path";
 import { loadRootEnv } from "@crm/env";
 import type { NextConfig } from "next";
-import path from "node:path";
 
 loadRootEnv();
 
