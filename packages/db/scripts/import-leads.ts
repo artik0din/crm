@@ -2,7 +2,11 @@ import "@crm/env/load";
 
 import { type Db, db } from "../src/client";
 import { RecordSource } from "../src/generated/prisma/enums";
-import { type LeadRow, readLeadCsv } from "./import-leads-csv";
+import {
+	type CsvColumnSet,
+	type LeadRow,
+	readLeadCsv,
+} from "./import-leads-csv";
 import {
 	ensureImportFields,
 	type ImportFieldSets,
@@ -11,9 +15,12 @@ import {
 } from "./import-leads-fields";
 import {
 	companyFieldValues,
+	companyFieldValuesToWrite,
 	companyNameFromDomain,
 	contactFieldValues,
+	type ImportFieldValueMap,
 	localPartFromEmail,
+	mergeCompanyFieldValuesFirstWins,
 	type SegmentKey,
 	segmentFromSourceFile,
 } from "./import-leads-mappings";
@@ -21,7 +28,9 @@ import {
 export type ImportRejectReason =
 	| "missing_email"
 	| "below_min_score"
-	| "segment_filtered";
+	| "segment_filtered"
+	| "invalid_integer"
+	| "invalid_date";
 
 export type ImportStats = {
 	linesRead: number;
@@ -102,12 +111,14 @@ function parseArgs(argv: string[]): ImportLeadsOptions {
 	return { csvPath, dryRun, limit, minScore, segments };
 }
 
-function emptyRejected(): Record<ImportRejectReason, number> {
+function emptyRejected() {
 	return {
 		missing_email: 0,
 		below_min_score: 0,
 		segment_filtered: 0,
-	};
+		invalid_integer: 0,
+		invalid_date: 0,
+	} satisfies Record<ImportRejectReason, number>;
 }
 
 function shouldImportRow(
@@ -132,17 +143,63 @@ function shouldImportRow(
 	return true;
 }
 
+function nonEmpty(value: string | null | undefined): string | null {
+	const trimmed = value?.trim();
+	return trimmed ? trimmed : null;
+}
+
+async function writeCompanyFieldsForDomain(
+	client: Db,
+	companyId: string,
+	companyFields: ImportFieldSets["company"],
+	row: LeadRow,
+	columns: CsvColumnSet,
+	companyFieldState: Map<string, ImportFieldValueMap>,
+	stats: ImportStats,
+	domain: string,
+): Promise<void> {
+	const rowValues = companyFieldValues(row, columns);
+	const merged = mergeCompanyFieldValuesFirstWins(
+		companyFieldState.get(domain) ?? {},
+		rowValues,
+	);
+	companyFieldState.set(domain, merged);
+	const toWrite = companyFieldValuesToWrite(rowValues, merged);
+	stats.fieldValuesWritten += await writeCompanyValues(
+		client,
+		companyFields,
+		companyId,
+		toWrite,
+	);
+}
+
 async function upsertCompany(
 	client: Db,
 	domain: string,
 	row: LeadRow,
+	columns: CsvColumnSet,
 	companyFields: ImportFieldSets["company"],
 	stats: ImportStats,
 	companyCache: Map<string, string>,
+	companyFieldState: Map<string, ImportFieldValueMap>,
 	dryRun: boolean,
 ): Promise<string | null> {
 	const cached = companyCache.get(domain);
-	if (cached) return cached;
+	if (cached) {
+		if (!dryRun && companyFields.length > 0) {
+			await writeCompanyFieldsForDomain(
+				client,
+				cached,
+				companyFields,
+				row,
+				columns,
+				companyFieldState,
+				stats,
+				domain,
+			);
+		}
+		return cached;
+	}
 
 	const existing = await client.company.findFirst({
 		where: { domain, archivedAt: null },
@@ -179,13 +236,18 @@ async function upsertCompany(
 
 	companyCache.set(domain, company.id);
 
-	const values = companyFieldValues(row);
-	stats.fieldValuesWritten += await writeCompanyValues(
-		client,
-		companyFields,
-		company.id,
-		values,
-	);
+	if (companyFields.length > 0) {
+		await writeCompanyFieldsForDomain(
+			client,
+			company.id,
+			companyFields,
+			row,
+			columns,
+			companyFieldState,
+			stats,
+			domain,
+		);
+	}
 
 	return company.id;
 }
@@ -193,14 +255,16 @@ async function upsertCompany(
 async function upsertContact(
 	client: Db,
 	row: LeadRow,
+	columns: CsvColumnSet,
 	companyId: string | null,
 	contactFields: ImportFieldSets["contact"],
 	stats: ImportStats,
 	dryRun: boolean,
 ): Promise<void> {
-	const firstName = row.firstName?.trim() || localPartFromEmail(row.email);
-	const lastName = row.lastName?.trim() || null;
-	const phone = row.telValid && row.telE164 ? row.telE164 : null;
+	const incomingFirst =
+		nonEmpty(row.firstName) ?? localPartFromEmail(row.email);
+	const incomingLast = nonEmpty(row.lastName);
+	const incomingPhone = row.telValid && row.telE164 ? row.telE164.trim() : null;
 
 	if (dryRun) {
 		const existing = await client.contact.findFirst({
@@ -214,16 +278,29 @@ async function upsertContact(
 
 	const existing = await client.contact.findFirst({
 		where: { email: row.email, archivedAt: null },
-		select: { id: true },
+		select: {
+			id: true,
+			firstName: true,
+			lastName: true,
+			phone: true,
+			companyId: true,
+			source: true,
+		},
 	});
+
+	const firstName = nonEmpty(existing?.firstName) ?? incomingFirst;
+	const lastName = nonEmpty(existing?.lastName) ?? incomingLast;
+	const phone = nonEmpty(existing?.phone) ?? incomingPhone;
+	const linkedCompanyId = existing?.companyId ?? companyId;
+	const source = existing?.source ?? RecordSource.IMPORT;
 
 	const payload = {
 		firstName,
 		lastName,
 		email: row.email,
 		phone,
-		companyId,
-		source: RecordSource.IMPORT,
+		companyId: linkedCompanyId,
+		source,
 	};
 
 	const contact = existing
@@ -240,7 +317,7 @@ async function upsertContact(
 	if (existing) stats.contactsUpdated++;
 	else stats.contactsCreated++;
 
-	const values = contactFieldValues(row);
+	const values = contactFieldValues(row, columns);
 	stats.fieldValuesWritten += await writeContactValues(
 		client,
 		contactFields,
@@ -271,15 +348,21 @@ export async function runImportLeads(
 		rows: allRows,
 		linesRead,
 		missingEmail,
+		invalidInteger,
+		invalidDate,
+		columns,
 	} = await readLeadCsv(options.csvPath);
 	stats.linesRead = linesRead;
 	stats.rowsParsed = allRows.length;
 	stats.rejected.missing_email = missingEmail;
+	stats.rejected.invalid_integer = invalidInteger;
+	stats.rejected.invalid_date = invalidDate;
 
 	const rows = options.limit ? allRows.slice(0, options.limit) : allRows;
 	const technoSites = rows.map((row) => row.technoSite).filter(Boolean);
 
 	const companyCache = new Map<string, string>();
+	const companyFieldState = new Map<string, ImportFieldValueMap>();
 	let contactFields: ImportFieldSets["contact"] = [];
 	let companyFields: ImportFieldSets["company"] = [];
 
@@ -301,9 +384,11 @@ export async function runImportLeads(
 				client,
 				row.domain,
 				row,
+				columns,
 				companyFields,
 				stats,
 				companyCache,
+				companyFieldState,
 				options.dryRun,
 			);
 		}
@@ -311,6 +396,7 @@ export async function runImportLeads(
 		await upsertContact(
 			client,
 			row,
+			columns,
 			companyId,
 			contactFields,
 			stats,
@@ -341,6 +427,8 @@ export function formatImportStats(stats: ImportStats): string {
 		`companies_updated: ${stats.companiesUpdated}`,
 		`field_values_written: ${stats.fieldValuesWritten}`,
 		`rejected_missing_email: ${stats.rejected.missing_email}`,
+		`rejected_invalid_integer: ${stats.rejected.invalid_integer}`,
+		`rejected_invalid_date: ${stats.rejected.invalid_date}`,
 		`rejected_below_min_score: ${stats.rejected.below_min_score}`,
 		`rejected_segment_filtered: ${stats.rejected.segment_filtered}`,
 		`duration_ms: ${stats.durationMs}`,
@@ -354,9 +442,8 @@ if (import.meta.main) {
 		.then((stats) => {
 			console.log(formatImportStats(stats));
 		})
-		.catch((error: unknown) => {
-			const message = error instanceof Error ? error.message : String(error);
-			console.error(message);
+		.catch((error) => {
+			console.error(error instanceof Error ? error.message : String(error));
 			process.exit(1);
 		});
 }

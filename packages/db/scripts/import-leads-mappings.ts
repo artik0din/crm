@@ -1,4 +1,8 @@
-import type { LeadRow } from "./import-leads-csv";
+import type { CsvColumnSet, LeadRow } from "./import-leads-csv";
+
+export type ImportFieldValue = string | number | null;
+
+export type ImportFieldValueMap = Record<string, ImportFieldValue>;
 
 export const SEGMENT_OPTIONS = [
 	"acheteur",
@@ -12,7 +16,7 @@ export const SEGMENT_OPTIONS = [
 
 export type SegmentKey = (typeof SEGMENT_OPTIONS)[number];
 
-const SOURCE_FILE_TO_SEGMENT: Record<string, SegmentKey> = {
+const SOURCE_FILE_TO_SEGMENT = {
 	"Business Pro - Purchase.csv": "acheteur",
 	"Clients Pack Mindeo.csv": "pack_mindeo",
 	"Business Pro - Membres Groupe Coaching.csv": "coaching",
@@ -20,7 +24,7 @@ const SOURCE_FILE_TO_SEGMENT: Record<string, SegmentKey> = {
 	"Business Pro - Leads Actif -6 mois.csv": "actif_6m",
 	"Business Pro - Leads Actif -12 mois.csv": "actif_12m",
 	"Business Pro - Leads Actif -24 mois.csv": "actif_24m",
-};
+} satisfies Record<string, SegmentKey>;
 
 export function segmentFromSourceFile(sourceFile: string): SegmentKey | null {
 	return SOURCE_FILE_TO_SEGMENT[sourceFile] ?? null;
@@ -49,6 +53,11 @@ export function sirenEtatOption(etat: string): string | null {
 	return null;
 }
 
+export function siteEtatOption(etat: string): string | null {
+	if (etat === "actif" || etat === "cesse") return etat;
+	return null;
+}
+
 export function telTypeOption(telType: string): string | null {
 	if (telType === "mobile" || telType === "fixe" || telType === "autre") {
 		return telType;
@@ -68,54 +77,150 @@ export function localPartFromEmail(email: string): string {
 	return email.slice(0, at);
 }
 
-export function parseImportDate(raw: string | null): string | null {
-	if (!raw?.trim()) return null;
+function hasColumn(columns: CsvColumnSet, key: string): boolean {
+	return columns.has(key);
+}
+
+function textValue(raw: string): string | null {
 	const trimmed = raw.trim();
-	const dateOnly = trimmed.slice(0, 10);
-	if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return dateOnly;
-	return null;
+	return trimmed ? trimmed : null;
 }
 
-export function contactFieldValues(row: LeadRow): Record<string, unknown> {
-	const values: Record<string, unknown> = {};
+export function contactFieldValues(
+	row: LeadRow,
+	columns: CsvColumnSet,
+): ImportFieldValueMap {
+	const values: ImportFieldValueMap = {};
 
-	if (row.score !== null) values.score = row.score;
+	if (hasColumn(columns, "score")) {
+		values.score = row.score;
+	}
 
-	const segment = segmentFromSourceFile(row.sourceFile);
-	if (segment) values.segment = segment;
+	if (hasColumn(columns, "source_file")) {
+		values.segment = row.sourceFile.trim()
+			? segmentFromSourceFile(row.sourceFile)
+			: null;
+	}
 
-	values.engagement = engagementFromTags(row.tags);
-	values.dirigeant = dirigeantFromConfiance(row.confiance);
+	if (hasColumn(columns, "Étiquettes")) {
+		values.engagement = row.tags.trim() ? engagementFromTags(row.tags) : null;
+	}
 
-	if (row.siren) values.siren = row.siren;
+	if (hasColumn(columns, "confiance")) {
+		values.dirigeant = row.confiance.trim()
+			? dirigeantFromConfiance(row.confiance)
+			: null;
+	}
 
-	const etat = sirenEtatOption(row.sirenEtat);
-	if (etat) values.siren_etat = etat;
+	if (hasColumn(columns, "siren")) {
+		values.siren = textValue(row.siren);
+	}
 
-	if (row.sirenNaf) values.siren_naf = row.sirenNaf;
+	if (hasColumn(columns, "siren_etat")) {
+		values.siren_etat = sirenEtatOption(row.sirenEtat);
+	}
 
-	const sirenDate = parseImportDate(row.sirenDateCreation);
-	if (sirenDate) values.siren_date_creation = sirenDate;
+	if (hasColumn(columns, "siren_naf")) {
+		values.siren_naf = textValue(row.sirenNaf);
+	}
 
-	if (row.sirenSiegeDept) values.siren_siege_dept = row.sirenSiegeDept;
-	if (row.sirenSiegeCommune) values.siren_siege_commune = row.sirenSiegeCommune;
+	if (hasColumn(columns, "siren_date_creation")) {
+		values.siren_date_creation = row.sirenDateCreation
+			? row.sirenDateCreation
+			: null;
+	}
 
-	const telType = telTypeOption(row.telType);
-	if (telType) values.tel_type = telType;
+	if (hasColumn(columns, "siren_siege_dept")) {
+		values.siren_siege_dept = textValue(row.sirenSiegeDept);
+	}
 
-	if (row.technoSite) values.site_techno = row.technoSite;
+	if (hasColumn(columns, "siren_siege_commune")) {
+		values.siren_siege_commune = textValue(row.sirenSiegeCommune);
+	}
 
-	const inscrit = parseImportDate(row.createdAt);
-	if (inscrit) values.inscrit_le = inscrit;
+	if (hasColumn(columns, "tel_type")) {
+		values.tel_type = telTypeOption(row.telType);
+	}
 
-	if (row.idSource) values.id_source = row.idSource;
+	if (hasColumn(columns, "techno_site")) {
+		values.site_techno = textValue(row.technoSite);
+	}
+
+	if (hasColumn(columns, "Date de création")) {
+		values.inscrit_le = row.createdAt;
+	}
+
+	if (hasColumn(columns, "ID")) {
+		values.id_source = textValue(row.idSource);
+	}
+
+	if (hasColumn(columns, "site_denomination")) {
+		values.site_denomination = textValue(row.siteDenomination);
+	}
+
+	if (hasColumn(columns, "site_categorie_juridique")) {
+		values.site_categorie_juridique = textValue(row.siteCategorieJuridique);
+	}
+
+	if (hasColumn(columns, "site_naf")) {
+		values.site_naf = textValue(row.siteNaf);
+	}
+
+	if (hasColumn(columns, "site_tranche_effectif")) {
+		values.site_tranche_effectif = textValue(row.siteTrancheEffectif);
+	}
+
+	if (hasColumn(columns, "site_etat")) {
+		values.site_etat = siteEtatOption(row.siteEtat);
+	}
+
+	if (hasColumn(columns, "site_siege_dept")) {
+		values.site_siege_dept = textValue(row.siteSiegeDept);
+	}
 
 	return values;
 }
 
-export function companyFieldValues(row: LeadRow): Record<string, unknown> {
-	const values: Record<string, unknown> = {};
-	if (row.technoSite) values.site_techno = row.technoSite;
-	if (row.sirenSite) values.siren_site = row.sirenSite;
+export function companyFieldValues(
+	row: LeadRow,
+	columns: CsvColumnSet,
+): ImportFieldValueMap {
+	const values: ImportFieldValueMap = {};
+	if (hasColumn(columns, "techno_site")) {
+		values.site_techno = textValue(row.technoSite);
+	}
+	if (hasColumn(columns, "siren_site")) {
+		values.siren_site = textValue(row.sirenSite);
+	}
 	return values;
+}
+
+export function mergeCompanyFieldValuesFirstWins(
+	existing: ImportFieldValueMap,
+	incoming: ImportFieldValueMap,
+): ImportFieldValueMap {
+	const merged: ImportFieldValueMap = { ...existing };
+	for (const [key, value] of Object.entries(incoming)) {
+		const current = merged[key];
+		if (current !== undefined && current !== null && current !== "") continue;
+		if (value !== undefined && value !== null && value !== "") {
+			merged[key] = value;
+		}
+	}
+	return merged;
+}
+
+export function companyFieldValuesToWrite(
+	rowValues: ImportFieldValueMap,
+	merged: ImportFieldValueMap,
+): ImportFieldValueMap {
+	const out: ImportFieldValueMap = {};
+	for (const [key, value] of Object.entries(rowValues)) {
+		if (value === null || value === "") {
+			const kept = merged[key];
+			if (kept !== undefined && kept !== null && kept !== "") continue;
+		}
+		out[key] = value;
+	}
+	return out;
 }

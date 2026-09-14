@@ -1,7 +1,10 @@
 import type { Db } from "../src/client";
 import { type FieldDefinitionWithOptions, writeValues } from "../src/fields";
 import { FieldEntity, FieldType } from "../src/generated/prisma/enums";
-import { SEGMENT_OPTIONS } from "./import-leads-mappings";
+import {
+	type ImportFieldValueMap,
+	SEGMENT_OPTIONS,
+} from "./import-leads-mappings";
 
 type SelectFieldSpec = {
 	key: string;
@@ -59,6 +62,13 @@ const CONTACT_SELECTS: SelectFieldSpec[] = [
 		key: "site_techno",
 		label: "Techno site",
 		options: [],
+		showOnTable: false,
+		showOnFilter: false,
+	},
+	{
+		key: "site_etat",
+		label: "État site",
+		options: ["actif", "cesse"],
 		showOnTable: false,
 		showOnFilter: false,
 	},
@@ -121,6 +131,41 @@ const CONTACT_SCALARS: ScalarFieldSpec[] = [
 		showOnTable: false,
 		showOnFilter: false,
 	},
+	{
+		key: "site_denomination",
+		label: "Dénomination site",
+		type: FieldType.TEXT,
+		showOnTable: false,
+		showOnFilter: false,
+	},
+	{
+		key: "site_categorie_juridique",
+		label: "Catégorie juridique site",
+		type: FieldType.TEXT,
+		showOnTable: false,
+		showOnFilter: false,
+	},
+	{
+		key: "site_naf",
+		label: "NAF site",
+		type: FieldType.TEXT,
+		showOnTable: false,
+		showOnFilter: false,
+	},
+	{
+		key: "site_tranche_effectif",
+		label: "Tranche effectif site",
+		type: FieldType.TEXT,
+		showOnTable: false,
+		showOnFilter: false,
+	},
+	{
+		key: "site_siege_dept",
+		label: "Département siège site",
+		type: FieldType.TEXT,
+		showOnTable: false,
+		showOnFilter: false,
+	},
 ];
 
 const COMPANY_SELECTS: SelectFieldSpec[] = [
@@ -157,6 +202,24 @@ async function nextPosition(db: Db, entity: FieldEntity): Promise<number> {
 	return (row?.position ?? -1) + 1;
 }
 
+async function assertFieldType(
+	db: Db,
+	entity: FieldEntity,
+	key: string,
+	expected: FieldType,
+): Promise<void> {
+	const existing = await db.fieldDefinition.findUnique({
+		where: { entity_key: { entity, key } },
+		select: { type: true, archivedAt: true },
+	});
+	if (!existing) return;
+	if (existing.type !== expected) {
+		throw new Error(
+			`Field "${key}" on ${entity} has type ${existing.type}; import requires ${expected}.`,
+		);
+	}
+}
+
 async function ensureSelectField(
 	db: Db,
 	entity: FieldEntity,
@@ -164,6 +227,8 @@ async function ensureSelectField(
 	position: number,
 	extraOptions: string[],
 ): Promise<FieldDefinitionWithOptions> {
+	await assertFieldType(db, entity, spec.key, FieldType.SELECT);
+
 	const optionLabels = [
 		...new Set([...spec.options, ...extraOptions].filter(Boolean)),
 	].sort((left, right) => left.localeCompare(right));
@@ -190,6 +255,7 @@ async function ensureSelectField(
 			agentFilled: false,
 			showOnTable: spec.showOnTable,
 			showOnFilter: spec.showOnFilter,
+			archivedAt: null,
 		},
 		include: { options: true },
 	});
@@ -224,6 +290,8 @@ async function ensureScalarField(
 	spec: ScalarFieldSpec,
 	position: number,
 ): Promise<FieldDefinitionWithOptions> {
+	await assertFieldType(db, entity, spec.key, spec.type);
+
 	return db.fieldDefinition.upsert({
 		where: { entity_key: { entity, key: spec.key } },
 		create: {
@@ -240,6 +308,7 @@ async function ensureScalarField(
 			agentFilled: false,
 			showOnTable: spec.showOnTable,
 			showOnFilter: spec.showOnFilter,
+			archivedAt: null,
 		},
 		include: { options: true },
 	});
@@ -305,7 +374,7 @@ export async function writeContactValues(
 	db: Db,
 	definitions: FieldDefinitionWithOptions[],
 	contactId: string,
-	values: Record<string, unknown>,
+	values: ImportFieldValueMap,
 ): Promise<number> {
 	const keys = Object.keys(values);
 	if (keys.length === 0) return 0;
@@ -317,7 +386,7 @@ export async function writeCompanyValues(
 	db: Db,
 	definitions: FieldDefinitionWithOptions[],
 	companyId: string,
-	values: Record<string, unknown>,
+	values: ImportFieldValueMap,
 ): Promise<number> {
 	const keys = Object.keys(values);
 	if (keys.length === 0) return 0;
