@@ -91,6 +91,16 @@ curl -fsS https://crm-api.payrolless.co/health
 curl -I https://crm.payrolless.co/sign-in
 ```
 
+## Import enriched leads
+
+Mount a read-only folder with the CSV at `./import`. Run the import tool profile:
+
+```sh
+docker compose -f docker-compose.selfhost.yml --profile tools run --rm tools bun packages/db/scripts/import-leads.ts /import/leads_enrichis.csv --min-score 2
+```
+
+The command prints counts only. Re-run it safely to refresh values without creating duplicates.
+
 ## Mailbox synchronization
 
 Schedule this command every five minutes with cron or a systemd timer:
