@@ -8,6 +8,9 @@ Setup, DB commands, Google Cloud and the `vercel env pull` hazard: `docs/setup.m
 and nothing that is not read. `packages/env` walks up to the workspace root and reads
 `.env`, then `.env.local` on top.
 
+`POSTGRES_PASSWORD`, `APP_PORT`, `API_PORT`, and `DOCKER_SUBNET` configure only
+`docker-compose.selfhost.yml`. They do not enter an application process.
+
 - **Real environment variables always win** — the loader never overwrites
   `process.env`, so Vercel/Docker/CI takes precedence.
 - **Never add a per-package `.env`.** Four once existed with duplicate
