@@ -1,0 +1,126 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: crm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_USER: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - crm
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - crm
+
+  migrate:
+    image: crm-api:selfhost
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    restart: "no"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/crm?schema=public
+    command: ["bunx", "prisma", "migrate", "deploy", "--config", "packages/db/prisma.config.ts"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - crm
+
+  api:
+    image: crm-api:selfhost
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      AGENT_URL: http://agent:2000
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/crm?schema=public
+      PORT: 3001
+      REDIS_URL: redis://redis:6379
+    ports:
+      - 127.0.0.1:${API_PORT:-5801}:3001
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3001/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - crm
+
+  app:
+    image: crm-app:selfhost
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${API_URL:-http://localhost:3001}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      AGENT_URL: http://agent:2000
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/crm?schema=public
+      PORT: 3000
+    ports:
+      - 127.0.0.1:${APP_PORT:-5800}:3000
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/sign-in').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - crm
+
+  agent:
+    image: crm-agent:selfhost
+    profiles: ["agent"]
+    build:
+      context: .
+      dockerfile: docker/agent.Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      AGENT_PORT: 2000
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/crm?schema=public
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - crm
+
+volumes:
+  postgres-data:
+
+networks:
+  crm:
+    name: crm-selfhost
+    ipam:
+      config:
+        - subnet: ${DOCKER_SUBNET:-172.16.47.0/24}
