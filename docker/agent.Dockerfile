@@ -22,5 +22,7 @@ COPY --from=builder /app/node_modules /app/node_modules
 COPY --from=builder /app/package.json /app/package.json
 COPY --from=builder /app/apps/agent /app/apps/agent
 COPY --from=builder /app/packages /app/packages
+RUN mkdir -p .eve/.workflow-data && chown -R bun:bun /app
 EXPOSE 2000
+USER bun
 CMD ["bun", "scripts/start.ts"]

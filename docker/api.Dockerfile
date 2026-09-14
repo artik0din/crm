@@ -16,8 +16,10 @@ RUN DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crm bunx turbo run
 
 FROM installer AS migrator
 WORKDIR /app/packages/db
+COPY deploy/selfhost-guard-env.sh /usr/local/bin/selfhost-guard-env.sh
+RUN chmod +x /usr/local/bin/selfhost-guard-env.sh
 USER bun
-CMD ["bun", "run", "db:deploy"]
+CMD ["sh", "-c", "/usr/local/bin/selfhost-guard-env.sh && bun run db:deploy"]
 
 FROM oven/bun:1 AS production-deps
 WORKDIR /app

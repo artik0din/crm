@@ -2,12 +2,16 @@ services:
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
+    entrypoint: ["/usr/local/bin/postgres-docker-entrypoint.sh"]
     environment:
       POSTGRES_DB: crm
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_USER: postgres
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./deploy/selfhost-guard-env.sh:/usr/local/bin/selfhost-guard-env.sh:ro
+      - ./deploy/postgres-docker-entrypoint.sh:/usr/local/bin/postgres-docker-entrypoint.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d crm"]
       interval: 5s
@@ -19,8 +23,19 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    entrypoint: ["/usr/local/bin/redis-docker-cmd.sh"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    volumes:
+      - ./deploy/selfhost-guard-env.sh:/usr/local/bin/selfhost-guard-env.sh:ro
+      - ./deploy/redis-docker-cmd.sh:/usr/local/bin/redis-docker-cmd.sh:ro
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+        [
+          "CMD-SHELL",
+          'redis-cli -a "$REDIS_PASSWORD" ping | grep -q PONG',
+        ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -37,8 +52,15 @@ services:
     working_dir: /app/packages/db
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/crm?schema=public
-    command: ["bun", "run", "db:deploy"]
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    command:
+      [
+        "sh",
+        "-c",
+        "/usr/local/bin/selfhost-guard-env.sh && bun run db:deploy",
+      ]
     depends_on:
       postgres:
         condition: service_healthy
@@ -54,9 +76,9 @@ services:
     env_file: .env
     environment:
       AGENT_URL: http://agent:2000
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/crm?schema=public
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
       PORT: 3001
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: ${REDIS_URL:?Set REDIS_URL in .env}
     ports:
       - 127.0.0.1:${API_PORT:-5801}:3001
     depends_on:
@@ -84,7 +106,7 @@ services:
     env_file: .env
     environment:
       AGENT_URL: http://agent:2000
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/crm?schema=public
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
       PORT: 3000
     ports:
       - 127.0.0.1:${APP_PORT:-5800}:3000
@@ -111,7 +133,9 @@ services:
     working_dir: /app
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/crm?schema=public
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     volumes:
       - ./import:/import:ro
     depends_on:
@@ -130,7 +154,9 @@ services:
     env_file: .env
     environment:
       AGENT_PORT: 2000
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/crm?schema=public
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+    volumes:
+      - agent-eve-workflow:/app/apps/agent/.eve/.workflow-data
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -139,6 +165,7 @@ services:
 
 volumes:
   postgres-data:
+  agent-eve-workflow:
 
 networks:
   crm:
