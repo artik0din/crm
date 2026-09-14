@@ -20,6 +20,7 @@ const allowedDevOrigins = (process.env.APP_URL ?? "")
 
 const nextConfig: NextConfig = {
 	allowedDevOrigins,
+	output: "standalone",
 
 	env: {
 		NEXT_PUBLIC_API_URL: apiUrl,
