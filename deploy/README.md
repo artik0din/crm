@@ -126,6 +126,10 @@ docker compose -f docker-compose.selfhost.yml --profile tools run --rm -T --user
 
 The command prints counts only.
 
+Use `--fields k1,k2` to synchronize only the named dynamic contact and company fields. This mode does not update core contact fields or create companies. An unknown field key stops the import before any database write. The option works with `--dry-run` and `--limit`.
+
+The output reports `field_values_upserted` and `field_values_cleared`. It also reports each rejected SELECT value as `rejected_unknown_option.<field_key>`.
+
 ## Mailbox synchronization
 
 Schedule this command every five minutes with cron or a systemd timer.
