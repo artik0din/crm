@@ -66,10 +66,7 @@ function addFieldWriteStats(
 ): void {
 	stats.fieldValuesUpserted += written.upserted;
 	stats.fieldValuesCleared += written.cleared;
-	for (const [key, count] of Object.entries(written.rejectedUnknownOption)) {
-		stats.rejectedUnknownOption[key] =
-			(stats.rejectedUnknownOption[key] ?? 0) + count;
-	}
+	addUnknownOptionStats(stats, written.rejectedUnknownOption);
 }
 
 function addUnknownOptionStats(
@@ -244,7 +241,6 @@ async function upsertCompany(
 	companyCache: Map<string, string>,
 	companyFieldState: Map<string, ImportFieldValueMap>,
 	dryRun: boolean,
-	fields: ReadonlySet<string> | null,
 ): Promise<string | null> {
 	const cached = companyCache.get(domain);
 	if (cached) {
@@ -258,7 +254,7 @@ async function upsertCompany(
 				companyFieldState,
 				stats,
 				domain,
-				fields,
+				null,
 			);
 		}
 		return cached;
@@ -309,7 +305,7 @@ async function upsertCompany(
 			companyFieldState,
 			stats,
 			domain,
-			fields,
+			null,
 		);
 	}
 
@@ -324,7 +320,6 @@ async function upsertContact(
 	contactFields: ImportFieldSets["contact"],
 	stats: ImportStats,
 	dryRun: boolean,
-	fields: ReadonlySet<string> | null,
 ): Promise<void> {
 	const incomingFirst =
 		nonEmpty(row.firstName) ?? localPartFromEmail(row.email);
@@ -382,7 +377,7 @@ async function upsertContact(
 	if (existing) stats.contactsUpdated++;
 	else stats.contactsCreated++;
 
-	const values = selectFieldValues(contactFieldValues(row, columns), fields);
+	const values = contactFieldValues(row, columns);
 	addFieldWriteStats(
 		stats,
 		await writeContactValues(client, contactFields, contact.id, values),
@@ -526,7 +521,6 @@ export async function runImportLeads(
 				companyCache,
 				companyFieldState,
 				options.dryRun,
-				null,
 			);
 		}
 
@@ -538,7 +532,6 @@ export async function runImportLeads(
 			contactFields,
 			stats,
 			options.dryRun,
-			null,
 		);
 		processed++;
 

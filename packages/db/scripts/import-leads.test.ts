@@ -179,6 +179,26 @@ describe("import-leads", () => {
 		expect(stats.contactsUpdated).toBe(0);
 		expect(stats.companiesCreated).toBe(0);
 		expect(stats.companiesUpdated).toBe(0);
+
+		const company = await db.company.findFirstOrThrow({
+			where: { domain: "acme-corp.example.test", archivedAt: null },
+			select: { id: true },
+		});
+		await db.fieldValue.deleteMany({ where: { companyId: company.id } });
+		await runImportLeads({
+			csvPath: fixture,
+			dryRun: false,
+			limit: 1,
+			minScore: null,
+			segments: null,
+			fields: new Set(["siren_site"]),
+		});
+		const companyValues = await db.fieldValue.findMany({
+			where: { companyId: company.id },
+			include: { field: true },
+		});
+		expect(companyValues).toHaveLength(1);
+		expect(companyValues[0]?.field.key).toBe("siren_site");
 	});
 
 	it("rejects unknown field keys before writes", async () => {
