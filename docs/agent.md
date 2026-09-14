@@ -213,7 +213,8 @@ wrong in the direction that looks useful.
 `lib/capabilities.ts` is the single place that knows what is set: prints it at boot,
 states it in the session instructions, and gives tools a shared "not configured,
 retrying will not help" result — **checked before the research budget is charged**. A
-missing key removes a place to look. **Never an error, never throws.**
+missing key removes a place to look. **Never an error, never throws.** Skipping the
+Context onboarding gate is the same: research stays off, the CRM stays usable.
 
 **`capabilities()` is async** because the Context key is a row;
 `capabilitiesFrom()`/`markdownFor()` are the pure halves. `contextDevKey()` is the only
