@@ -16,6 +16,7 @@ RUN DATABASE_URL=postgresql://postgres:postgres@postgres:5432/crm bunx turbo run
 
 FROM installer AS migrator
 WORKDIR /app/packages/db
+USER bun
 CMD ["bun", "run", "db:deploy"]
 
 FROM oven/bun:1 AS production-deps
@@ -37,4 +38,5 @@ COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=production-deps /app/packages ./packages
 COPY --from=builder /app/packages/db/src/generated ./packages/db/src/generated
 EXPOSE 3001
+USER bun
 CMD ["bun", "apps/api/dist/main.js"]
