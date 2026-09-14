@@ -32,8 +32,7 @@ function fakeDb(initial?: Partial<Row>) {
 			}) => {
 				row = row
 					? {
-							contextDevApiKey:
-								update.contextDevApiKey ?? row.contextDevApiKey,
+							contextDevApiKey: update.contextDevApiKey ?? row.contextDevApiKey,
 							contextDevSkipped:
 								update.contextDevSkipped ?? row.contextDevSkipped,
 						}

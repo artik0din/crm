@@ -27,8 +27,7 @@ function service(initial?: Partial<Row>) {
 			}) => {
 				row = row
 					? {
-							contextDevApiKey:
-								update.contextDevApiKey ?? row.contextDevApiKey,
+							contextDevApiKey: update.contextDevApiKey ?? row.contextDevApiKey,
 							contextDevSkipped:
 								update.contextDevSkipped ?? row.contextDevSkipped,
 						}
@@ -42,12 +41,7 @@ function service(initial?: Partial<Row>) {
 		},
 	} as unknown as Db;
 
-	return new SettingsService(
-		db,
-		{} as never,
-		{} as never,
-		{} as never,
-	);
+	return new SettingsService(db, {} as never, {} as never, {} as never);
 }
 
 describe("researchKey", () => {
