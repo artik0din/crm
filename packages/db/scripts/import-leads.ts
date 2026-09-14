@@ -11,6 +11,7 @@ import {
 	ensureImportFields,
 	IMPORT_FIELD_KEYS,
 	type ImportFieldSets,
+	type UnknownOptionCounts,
 	unknownSelectOptions,
 	writeCompanyValues,
 	writeContactValues,
@@ -43,7 +44,7 @@ export type ImportStats = {
 	companiesUpdated: number;
 	fieldValuesUpserted: number;
 	fieldValuesCleared: number;
-	rejectedUnknownOption: Record<string, number>;
+	rejectedUnknownOption: UnknownOptionCounts;
 	rejected: Record<ImportRejectReason, number>;
 	durationMs: number;
 };
@@ -71,7 +72,7 @@ function addFieldWriteStats(
 
 function addUnknownOptionStats(
 	stats: ImportStats,
-	rejected: Record<string, number>,
+	rejected: UnknownOptionCounts,
 ): void {
 	for (const [key, count] of Object.entries(rejected)) {
 		stats.rejectedUnknownOption[key] =

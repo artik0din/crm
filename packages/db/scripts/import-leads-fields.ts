@@ -204,20 +204,22 @@ export type ImportFieldSets = {
 	company: FieldDefinitionWithOptions[];
 };
 
+export type UnknownOptionCounts = Record<string, number>;
+
 export type FieldValueWriteStats = {
 	upserted: number;
 	cleared: number;
-	rejectedUnknownOption: Record<string, number>;
+	rejectedUnknownOption: UnknownOptionCounts;
 };
 
 export function unknownSelectOptions(
 	entity: FieldEntity,
 	values: ImportFieldValueMap,
-): Record<string, number> {
+): UnknownOptionCounts {
 	const specs =
 		entity === FieldEntity.CONTACT ? CONTACT_SELECTS : COMPANY_SELECTS;
 	const byKey = new Map(specs.map((spec) => [spec.key, spec]));
-	const rejected: Record<string, number> = {};
+	const rejected: UnknownOptionCounts = {};
 
 	for (const [key, value] of Object.entries(values)) {
 		const spec = byKey.get(key);
