@@ -556,6 +556,9 @@ async function flushProgress(_processed: number): Promise<void> {
 }
 
 export function formatImportStats(stats: ImportStats): string {
+	const rejectedUnknownOption = Object.values(
+		stats.rejectedUnknownOption,
+	).reduce((total, count) => total + count, 0);
 	const lines = [
 		`lines_read: ${stats.linesRead}`,
 		`rows_parsed: ${stats.rowsParsed}`,
@@ -570,6 +573,7 @@ export function formatImportStats(stats: ImportStats): string {
 		`rejected_invalid_date: ${stats.rejected.invalid_date}`,
 		`rejected_below_min_score: ${stats.rejected.below_min_score}`,
 		`rejected_segment_filtered: ${stats.rejected.segment_filtered}`,
+		`rejected_unknown_option: ${rejectedUnknownOption}`,
 		...Object.entries(stats.rejectedUnknownOption)
 			.sort(([left], [right]) => left.localeCompare(right))
 			.map(([key, count]) => `rejected_unknown_option.${key}: ${count}`),

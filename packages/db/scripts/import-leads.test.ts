@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { db } from "../src/client";
 import { type FieldDefinitionWithOptions, readValue } from "../src/fields";
-import { runImportLeads } from "./import-leads";
+import { formatImportStats, runImportLeads } from "./import-leads";
 
 process.env.NODE_ENV = "test";
 
@@ -142,6 +142,9 @@ describe("import-leads", () => {
 		]);
 		expect(initialStats.rejectedUnknownOption.site_etat).toBe(1);
 		expect(initialStats.fieldValuesCleared).toBe(0);
+		expect(formatImportStats(initialStats)).toContain(
+			"rejected_unknown_option: 1\nrejected_unknown_option.site_etat: 1",
+		);
 	});
 
 	it("syncs only selected dynamic fields", async () => {
