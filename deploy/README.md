@@ -38,10 +38,17 @@ chmod 600 .env
 openssl rand -base64 32
 ```
 
-Edit `.env` and replace every empty or placeholder value. Generate each secret independently.
+Edit `.env` and replace every `CHANGE_ME` and empty value. Generate each secret independently.
+Each of `POSTGRES_PASSWORD` and `REDIS_PASSWORD` must be at least 24 characters.
+Compose refuses to start Postgres, Redis, or migrations while either password is still `CHANGE_ME` or too short.
 
-Use an alphanumeric Postgres password or percent-encode reserved URL characters in `DATABASE_URL`.
-Keep `POSTGRES_PASSWORD` and the password inside `DATABASE_URL` identical.
+Percent-encode reserved URL characters in `DATABASE_URL` and `REDIS_URL` (`@`, `:`, `/`, `#`, `?`, `%`).
+Example: password `p@ss:w#rd` becomes `p%40ss%3Aw%23rd` in the URL.
+Keep `POSTGRES_PASSWORD` and the password segment inside `DATABASE_URL` identical.
+Keep `REDIS_PASSWORD` and the password segment inside `REDIS_URL` identical.
+
+Set `AGENT_BRIDGE_SECRET` only when you enable the optional `agent` Compose profile.
+Leave it empty for the default stack without Eve.
 
 Create a Google OAuth web client. Register this authorized redirect URI:
 
@@ -93,7 +100,14 @@ curl -I https://crm.payrolless.co/sign-in
 
 ## Import enriched leads
 
-Mount a read-only folder with the CSV at `./import`. Run the import tool profile:
+Place the CSV outside the git tree. On the VPS:
+
+```sh
+sudo install -d -m 700 /opt/crm/import
+sudo install -m 600 /path/to/leads_enrichis.csv /opt/crm/import/leads_enrichis.csv
+```
+
+The Compose `tools` profile mounts `./import` read-only (use `/opt/crm/import` when the repo lives at `/opt/crm`).
 
 ```sh
 docker compose -f docker-compose.selfhost.yml --profile tools run --rm tools bun packages/db/scripts/import-leads.ts /import/leads_enrichis.csv --min-score 2
@@ -103,10 +117,11 @@ The command prints counts only. Re-run it safely to refresh values without creat
 
 ## Mailbox synchronization
 
-Schedule this command every five minutes with cron or a systemd timer:
+Schedule this command every five minutes with cron or a systemd timer.
+It reads `CRON_SECRET` from the running API container, not from the host shell:
 
 ```sh
-curl -fsS -X POST -H "Authorization: Bearer ${CRON_SECRET}" https://crm-api.payrolless.co/internal/sync/mailboxes
+docker compose -f docker-compose.selfhost.yml exec -T api sh -c 'curl -fsS -X POST -H "Authorization: Bearer ${CRON_SECRET}" https://crm-api.payrolless.co/internal/sync/mailboxes'
 ```
 
 The API returns `503` when `CRON_SECRET` is absent. It returns `403` when the secret differs.
@@ -130,11 +145,13 @@ The one-shot migration service runs again. The API waits for its successful comp
 Create a compressed custom-format dump outside the container:
 
 ```sh
+sudo install -d -m 700 /var/backups/crm
 cd /opt/crm
-docker compose -f docker-compose.selfhost.yml exec -T postgres pg_dump -U postgres -d crm -Fc > "crm-$(date +%F-%H%M%S).dump"
+docker compose -f docker-compose.selfhost.yml exec -T postgres pg_dump -U postgres -d crm -Fc > "/var/backups/crm/crm-$(date +%F-%H%M%S).dump"
 ```
 
 Copy backups away from the VPS. Test restoration regularly on a separate database.
+Never store `.dump` files inside the git clone (`import/` and `*.dump` are ignored).
 
 ## Not covered
 
