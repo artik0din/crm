@@ -85,8 +85,9 @@ describe("DataTable sticky columns", () => {
 			</NuqsTestingAdapter>,
 		);
 
-		expect(html).toContain("sticky z-30 bg-muted left-0");
-		expect(html).toContain("sticky z-10 bg-card group-hover:bg-muted/60");
+		expect(html).toContain("sm:sticky sm:z-30 bg-muted");
+		expect(html).toContain("sm:max-w-[45vw]");
+		expect(html).toContain("sm:sticky sm:z-10 bg-card group-hover:bg-muted/60");
 		expect(html).toContain("width:16rem;min-width:16rem;max-width:16rem");
 	});
 
@@ -125,9 +126,9 @@ describe("DataTable sticky columns", () => {
 		);
 
 		expect(html).toContain("sticky left-0 z-30 bg-muted h-11 w-10");
-		expect(html).toContain("sticky z-30 bg-muted left-0 sm:left-10");
+		expect(html).toContain("sm:sticky sm:z-30 bg-muted sm:max-w-[45vw] left-0 sm:left-10");
 		expect(html).toContain(
-			"sticky z-10 bg-card group-hover:bg-muted/60 group-data-[state=selected]:bg-muted left-0 sm:left-10",
+			"sm:sticky sm:z-10 bg-card group-hover:bg-muted/60 group-data-[state=selected]:bg-muted sm:max-w-[45vw] left-0 sm:left-10",
 		);
 	});
 
@@ -194,7 +195,34 @@ describe("DataTable sticky columns", () => {
 		);
 
 		expect(html).toContain("[&amp;&gt;td.sticky]:sticky");
-		expect(html).toContain("sticky z-10");
+		expect(html).toContain("sm:sticky sm:z-10");
+	});
+
+	it("pins the name column from sm up only and caps column width at 40rem", () => {
+		const html = renderToStaticMarkup(
+			<NuqsTestingAdapter>
+				<DataTable
+					storageKey="test"
+					query={mockQuery}
+					columns={[
+						{
+							id: "name",
+							header: "Name",
+							width: "50rem",
+							cell: (row: { id: string; name: string }) => row.name,
+						},
+					]}
+					getRowId={(row) => row.id}
+					rows={[{ id: "1", name: "Alice" }]}
+					total={1}
+				/>
+			</NuqsTestingAdapter>,
+		);
+
+		expect(html).toContain("sm:sticky sm:z-30 bg-muted");
+		expect(html).toContain("sm:max-w-[45vw]");
+		expect(html).toContain("width:40rem;min-width:40rem;max-width:40rem");
+		expect(html).not.toContain("width:50rem");
 	});
 
 	it("renders first render with initial default widths without storage values", () => {

@@ -753,18 +753,23 @@ export function DataTable<TRow, TSub = unknown>({
 						)}
 						{visibleColumns.map((column, index) => {
 							const isFirst = index === 0;
-							const widthRem =
-								columnWidths[column.id] ?? parseWidthRem(column.width);
+							const widthRem = Math.min(
+								MAX_COLUMN_WIDTH_REM,
+								Math.max(
+									MIN_COLUMN_WIDTH_REM,
+									columnWidths[column.id] ?? parseWidthRem(column.width),
+								),
+							);
 							const isClassWidth =
 								column.width &&
 								(column.width.startsWith("w-") || column.width.includes(" "));
 							const stickyHeadClass =
 								isResizable && isFirst
 									? cn(
-											"sticky z-30 bg-muted",
+											"sm:sticky sm:z-30 bg-muted sm:max-w-[45vw]",
 											selection ? "left-0 sm:left-10" : "left-0",
 											isScrolled &&
-												"shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
+												"sm:shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
 										)
 									: undefined;
 							const isActive = query.sort === column.id;
@@ -922,8 +927,13 @@ export function DataTable<TRow, TSub = unknown>({
 									)}
 									{visibleColumns.map((column, index) => {
 										const isFirst = index === 0;
-										const widthRem =
-											columnWidths[column.id] ?? parseWidthRem(column.width);
+										const widthRem = Math.min(
+											MAX_COLUMN_WIDTH_REM,
+											Math.max(
+												MIN_COLUMN_WIDTH_REM,
+												columnWidths[column.id] ?? parseWidthRem(column.width),
+											),
+										);
 										const isClassWidth =
 											column.width &&
 											(column.width.startsWith("w-") ||
@@ -931,10 +941,10 @@ export function DataTable<TRow, TSub = unknown>({
 										const stickyCellClass =
 											isResizable && isFirst
 												? cn(
-														"sticky z-10 bg-card group-hover:bg-muted/60 group-data-[state=selected]:bg-muted",
+														"sm:sticky sm:z-10 bg-card group-hover:bg-muted/60 group-data-[state=selected]:bg-muted sm:max-w-[45vw]",
 														selection ? "left-0 sm:left-10" : "left-0",
 														isScrolled &&
-															"shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
+															"sm:shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
 													)
 												: undefined;
 										return (
@@ -1008,8 +1018,13 @@ export function DataTable<TRow, TSub = unknown>({
 												)}
 												{visibleColumns.map((column, index) => {
 													const isFirst = index === 0;
-													const widthRem =
-														columnWidths[column.id] ?? parseWidthRem(column.width);
+													const widthRem = Math.min(
+														MAX_COLUMN_WIDTH_REM,
+														Math.max(
+															MIN_COLUMN_WIDTH_REM,
+															columnWidths[column.id] ?? parseWidthRem(column.width),
+														),
+													);
 													const isClassWidth =
 														column.width &&
 														(column.width.startsWith("w-") ||
@@ -1017,10 +1032,10 @@ export function DataTable<TRow, TSub = unknown>({
 													const stickySubCellClass =
 														isResizable && isFirst
 															? cn(
-																	"sticky z-10 bg-muted/30 group-hover:bg-muted/60",
+																	"sm:sticky sm:z-10 bg-muted/30 group-hover:bg-muted/60 sm:max-w-[45vw]",
 																	selection ? "left-0 sm:left-10" : "left-0",
 																	isScrolled &&
-																		"shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
+																		"sm:shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
 																)
 															: undefined;
 													return (
