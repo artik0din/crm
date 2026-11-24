@@ -3,7 +3,12 @@
 import type { SortDirection, TableQueryState } from "@crm/ui/lib/table-query";
 import type { SavedViewFilters } from "@crm/validation/saved-view";
 import type { Nullable, Values } from "nuqs";
-import { useQueryStates } from "nuqs";
+import {
+	parseAsArrayOf,
+	parseAsString,
+	useQueryState,
+	useQueryStates,
+} from "nuqs";
 import { z } from "zod";
 import type {
 	FieldFilters,
@@ -151,7 +156,16 @@ export function useTableQuery<TTab extends string, TFacet extends string>(
 	const setArchived = (value: boolean) =>
 		setValues({ archived: value, page: 1 });
 
-	const currentView: SavedViewFilters = { q, sort, dir, archived, filters };
+	const [hide, setHide] = useQueryState("hide", parseAsArrayOf(parseAsString));
+
+	const currentView: SavedViewFilters = {
+		q,
+		sort,
+		dir,
+		archived,
+		filters,
+		hide: hide ?? undefined,
+	};
 
 	const applyView = (view: SavedViewFilters) => {
 		const update: RawUpdate = {
@@ -177,6 +191,7 @@ export function useTableQuery<TTab extends string, TFacet extends string>(
 		update.fields = nextFields;
 
 		setValues(update);
+		setHide(view.hide ?? null);
 	};
 
 	return { query, input, setArchived, currentView, applyView };
