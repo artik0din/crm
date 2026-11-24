@@ -6,14 +6,20 @@ import type * as React from "react";
 function Table({
 	className,
 	containerClassName,
+	containerRef,
+	onScroll,
 	overlay,
 	...props
 }: React.ComponentProps<"table"> & {
 	containerClassName?: string;
+	containerRef?: React.Ref<HTMLDivElement>;
+	onScroll?: React.UIEventHandler<HTMLDivElement>;
 	overlay?: React.ReactNode;
 }) {
 	return (
 		<div
+			ref={containerRef}
+			onScroll={onScroll}
 			data-slot="table-container"
 			className={cn("relative w-full overflow-x-auto", containerClassName)}
 		>

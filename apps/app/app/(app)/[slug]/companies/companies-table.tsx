@@ -44,7 +44,7 @@ const COLUMNS: DataTableColumn<CompanyRow>[] = [
 		header: "Company",
 		sortable: true,
 		hideable: false,
-		width: "w-[26%]",
+		width: "16rem",
 		cell: (row) => (
 			<span className="flex min-w-0 items-center gap-2.5">
 				<EntityLogo
@@ -54,7 +54,9 @@ const COLUMNS: DataTableColumn<CompanyRow>[] = [
 					name={row.name}
 					size="sm"
 				/>
-				<span className="truncate font-medium">{row.name}</span>
+				<span className="truncate font-medium" title={row.name}>
+					{row.name}
+				</span>
 			</span>
 		),
 	},
@@ -62,11 +64,13 @@ const COLUMNS: DataTableColumn<CompanyRow>[] = [
 		id: "domain",
 		header: "Domain",
 		sortable: true,
-		width: "w-[16%]",
+		width: "13rem",
 		hideBelow: "md",
 		cell: (row) =>
 			row.domain ? (
-				<span className="truncate text-muted-foreground">{row.domain}</span>
+				<span className="truncate text-muted-foreground" title={row.domain}>
+					{row.domain}
+				</span>
 			) : (
 				<EmptyCellValue />
 			),
@@ -75,11 +79,13 @@ const COLUMNS: DataTableColumn<CompanyRow>[] = [
 		id: "industry",
 		header: "Industry",
 		sortable: true,
-		width: "w-[16%]",
+		width: "13rem",
 		hideBelow: "lg",
 		cell: (row) =>
 			row.industry ? (
-				<span className="truncate">{row.industry}</span>
+				<span className="truncate" title={row.industry}>
+					{row.industry}
+				</span>
 			) : (
 				<EmptyCellValue />
 			),
@@ -88,7 +94,7 @@ const COLUMNS: DataTableColumn<CompanyRow>[] = [
 		id: "owner",
 		header: "Owner",
 		sortable: true,
-		width: "w-[16%]",
+		width: "12rem",
 		hideBelow: "md",
 		cell: (row) => <OwnerCell owner={row.owner} />,
 	},
@@ -97,7 +103,7 @@ const COLUMNS: DataTableColumn<CompanyRow>[] = [
 		header: "Contacts",
 		sortable: true,
 		align: "right",
-		width: "w-[9%]",
+		width: "8rem",
 		hideBelow: "lg",
 		cell: (row) => <span className="tabular-nums">{row.contactCount}</span>,
 	},
@@ -106,7 +112,7 @@ const COLUMNS: DataTableColumn<CompanyRow>[] = [
 		header: "Open deals",
 		sortable: true,
 		align: "right",
-		width: "w-[9%]",
+		width: "8rem",
 		cell: (row) => <span className="tabular-nums">{row.openDealCount}</span>,
 	},
 	{
@@ -115,7 +121,7 @@ const COLUMNS: DataTableColumn<CompanyRow>[] = [
 		label: "Created date",
 		sortable: true,
 		align: "right",
-		width: "w-[10%]",
+		width: "10rem",
 		defaultHidden: true,
 		cell: (row) => (
 			<span className="text-muted-foreground">
@@ -128,7 +134,7 @@ const COLUMNS: DataTableColumn<CompanyRow>[] = [
 		header: "Last activity",
 		sortable: true,
 		align: "right",
-		width: "w-[12%]",
+		width: "10rem",
 		hideBelow: "sm",
 		cell: (row) => (
 			<span className="text-muted-foreground">
@@ -145,7 +151,7 @@ const COLUMNS: DataTableColumn<CompanyRow>[] = [
 		header: "Enrichment",
 		label: "Enrichment status",
 		defaultHidden: true,
-		width: "w-[14%]",
+		width: "12rem",
 		cell: (row) => (
 			<EnrichmentIndicator status={row.enrichmentStatus} queued={row.queued} />
 		),
@@ -158,7 +164,7 @@ const ARCHIVED_COLUMN: DataTableColumn<CompanyRow> = {
 	label: "Archived date",
 	sortable: true,
 	align: "right",
-	width: "w-[12%]",
+	width: "10rem",
 	cell: (row) => (
 		<span className="text-muted-foreground">
 			{row.archivedAt ? (

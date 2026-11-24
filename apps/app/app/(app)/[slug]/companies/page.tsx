@@ -25,7 +25,7 @@ export default function CompaniesPage({
 	searchParams,
 }: PageProps<"/[slug]/companies">) {
 	return (
-		<PageShell className="min-h-0">
+		<PageShell width="full" className="min-h-0">
 			<PageShellHeader>
 				<PageShellHeading>
 					<PageShellTitle>Companies</PageShellTitle>
