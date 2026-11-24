@@ -170,4 +170,31 @@ describe("manual-only enrichment", () => {
 		expect(imagesSwept).toBe(true);
 		expect(agentCalled).toBe(false);
 	});
+
+	it("does not enqueue workspace-profile on background workspaceChanged when automatic enrichment is disabled", async () => {
+		await trigger.workspaceChanged("example.test", "Background recheck");
+
+		const tasks = await db.agentTask.findMany({
+			where: { kind: "workspace-profile", reason: { contains: "example.test" } },
+		});
+
+		expect(tasks).toHaveLength(0);
+	});
+
+	it("enqueues workspace-profile as a requested task on workspaceRequested", async () => {
+		try {
+			await trigger.workspaceRequested("onboarding.test", "Onboarding website entered");
+
+			const tasks = await db.agentTask.findMany({
+				where: { kind: "workspace-profile", reason: { contains: "onboarding.test" } },
+			});
+
+			expect(tasks).toHaveLength(1);
+			expect(tasks[0]?.priority).toBe(PRIORITY.requested);
+		} finally {
+			await db.agentTask.deleteMany({
+				where: { kind: "workspace-profile", reason: { contains: "onboarding.test" } },
+			});
+		}
+	});
 });

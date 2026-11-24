@@ -102,6 +102,15 @@ export class AgentTriggerService {
 		});
 	}
 
+	async workspaceRequested(website: string, reason: string): Promise<void> {
+		await this.enqueue({
+			kind: "workspace-profile",
+			reason: `${reason} (${website})`,
+			priority: PRIORITY.requested,
+			budget: 4,
+		});
+	}
+
 	async contactCreated(contactId: string, reason: string): Promise<void> {
 		if (!AGENT_DISPATCH.automaticEnrichment) return;
 
