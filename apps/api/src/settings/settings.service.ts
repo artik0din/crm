@@ -2,11 +2,14 @@ import type { Db } from "@crm/db";
 import {
 	DEFAULT_AGENT_MODEL,
 	DEFAULT_OPENROUTER_MODEL,
+	getActiveAiProvider,
+	getDefaultModelForProvider,
 	maskKey,
 	readAgentModel,
 	readArchiveRetentionDays,
 	readContextDevKey,
 	readContextDevSkipped,
+	resolveModelForProvider,
 	skipContextDev,
 	writeAgentModel,
 	writeArchiveRetentionDays,
@@ -36,23 +39,35 @@ export class SettingsService {
 	) {}
 
 	async agentModel(): Promise<AgentModelSettings> {
-		const [model, row] = await Promise.all([
-			readAgentModel(this.db),
-			this.db.appSetting.findFirst({ select: { updatedAt: true } }),
+		const provider = getActiveAiProvider();
+		const defaultModel = getDefaultModelForProvider(provider);
+
+		const [catalogModels, row] = await Promise.all([
+			this.catalog.models(),
+			this.db.appSetting.findFirst({
+				select: {
+					agentModelId: true,
+					agentModelContextWindow: true,
+					updatedAt: true,
+				},
+			}),
 		]);
 
-		const defaultModel = process.env.OPENROUTER_API_KEY?.trim()
-			? DEFAULT_OPENROUTER_MODEL
-			: DEFAULT_AGENT_MODEL;
+		const validIds = catalogModels?.map((model) => model.id) ?? null;
+		const resolved = resolveModelForProvider(
+			row?.agentModelId,
+			row?.agentModelContextWindow,
+			provider,
+			validIds,
+		);
 
 		return {
-			selectedId: model.isDefault ? null : model.id,
-			effectiveId: model.isDefault ? defaultModel.id : model.id,
+			selectedId: row?.agentModelId ?? null,
+			effectiveId: resolved.id,
 			defaultId: defaultModel.id,
-			effective: await this.catalog.find(
-				model.isDefault ? defaultModel.id : model.id,
-			),
+			effective: catalogModels?.find((model) => model.id === resolved.id) ?? null,
 			updatedAt: row?.updatedAt.toISOString() ?? null,
+			unavailableOnCurrentProvider: resolved.unavailableOnCurrentProvider,
 		};
 	}
 

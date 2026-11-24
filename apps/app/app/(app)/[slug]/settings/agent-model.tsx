@@ -181,6 +181,12 @@ export function AgentModel() {
 								}`
 							: effectiveId}
 				</p>
+
+				{settings.data.unavailableOnCurrentProvider && (
+					<p className="text-amber-600 dark:text-amber-400 text-xs">
+						The saved model ({selectedId}) is unavailable on the current provider. The agent is using {effectiveId}.
+					</p>
+				)}
 			</CardContent>
 		</Card>
 	);

@@ -1,3 +1,4 @@
+import { getActiveAiProvider } from "@crm/db/settings";
 import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import type { Cache } from "cache-manager";
@@ -109,7 +110,7 @@ export class ModelCatalogService {
 	constructor(@Inject(CACHE_MANAGER) private readonly cache: Cache) {}
 
 	async models(): Promise<CatalogModel[] | null> {
-		const isOpenRouter = Boolean(process.env.OPENROUTER_API_KEY?.trim());
+		const isOpenRouter = getActiveAiProvider() === "openrouter";
 		const cacheKey = isOpenRouter
 			? `${CATALOG_KEY}:openrouter`
 			: `${CATALOG_KEY}:gateway`;

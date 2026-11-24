@@ -1,5 +1,10 @@
 import { db } from "@crm/db";
-import { DEFAULT_OPENROUTER_MODEL, readAgentModel } from "@crm/db/settings";
+import {
+	DEFAULT_OPENROUTER_MODEL,
+	readAgentModel,
+	resolveAgentModel,
+	resolveModelForProvider,
+} from "@crm/db/settings";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 
 export type AiProvider = "openrouter" | "gateway" | "none";
@@ -85,17 +90,11 @@ export async function selectedModelStep(): Promise<{
 	const openrouter = getOpenRouterClient(apiKey);
 
 	try {
-		const setting = await readAgentModel(db);
-		const modelId = setting.isDefault
-			? DEFAULT_OPENROUTER_MODEL.id
-			: setting.id;
-		const tokens = setting.isDefault
-			? DEFAULT_OPENROUTER_MODEL.contextWindowTokens
-			: setting.contextWindowTokens;
+		const setting = await resolveAgentModel(db, { provider: "openrouter" });
 
 		return {
-			model: openrouter.chat(modelId),
-			modelContextWindowTokens: tokens,
+			model: openrouter.chat(setting.id),
+			modelContextWindowTokens: setting.contextWindowTokens,
 		};
 	} catch (error) {
 		console.error(
@@ -158,10 +157,16 @@ export async function selectedRunnerModelStep(runId: string): Promise<{
 
 		if (!run) return null;
 
+		const effective = resolveModelForProvider(
+			run.version.modelId,
+			run.version.modelContextWindowTokens,
+			"openrouter",
+		);
+
 		const openrouter = getOpenRouterClient(apiKey);
 		return {
-			model: openrouter.chat(run.version.modelId),
-			modelContextWindowTokens: run.version.modelContextWindowTokens,
+			model: openrouter.chat(effective.id),
+			modelContextWindowTokens: effective.contextWindowTokens,
 		};
 	} catch {
 		return null;
