@@ -11,8 +11,9 @@ are in `docs/setup.md`.
 
 ## Model
 
-Default `zai/glm-5.2-fast`; `DEFAULT_AGENT_MODEL` in `@crm/db/settings` because the
-agent and the API both need it.
+Default `zai/glm-5.2-fast` (AI Gateway) or `z-ai/glm-5.3-flash` (OpenRouter);
+`DEFAULT_AGENT_MODEL` and `DEFAULT_OPENROUTER_MODEL` in `@crm/db/settings`.
+Resolved via OpenRouter when `OPENROUTER_API_KEY` is set, or via AI Gateway.
 
 - **A row (`AppSetting`), not an env var**, via `defineDynamic` on `session.started`.
   Open conversations keep their model — prompt caches are per model.

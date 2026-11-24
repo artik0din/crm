@@ -12,6 +12,11 @@ export const DEFAULT_AGENT_MODEL = {
 	contextWindowTokens: 1_000_000,
 } as const;
 
+export const DEFAULT_OPENROUTER_MODEL = {
+	id: "z-ai/glm-5.3-flash",
+	contextWindowTokens: 128_000,
+} as const;
+
 export interface AgentModelSetting {
 	id: string;
 	contextWindowTokens: number;

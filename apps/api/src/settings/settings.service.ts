@@ -1,6 +1,7 @@
 import type { Db } from "@crm/db";
 import {
 	DEFAULT_AGENT_MODEL,
+	DEFAULT_OPENROUTER_MODEL,
 	maskKey,
 	readAgentModel,
 	readArchiveRetentionDays,
@@ -40,11 +41,17 @@ export class SettingsService {
 			this.db.appSetting.findFirst({ select: { updatedAt: true } }),
 		]);
 
+		const defaultModel = process.env.OPENROUTER_API_KEY?.trim()
+			? DEFAULT_OPENROUTER_MODEL
+			: DEFAULT_AGENT_MODEL;
+
 		return {
 			selectedId: model.isDefault ? null : model.id,
-			effectiveId: model.id,
-			defaultId: DEFAULT_AGENT_MODEL.id,
-			effective: await this.catalog.find(model.id),
+			effectiveId: model.isDefault ? defaultModel.id : model.id,
+			defaultId: defaultModel.id,
+			effective: await this.catalog.find(
+				model.isDefault ? defaultModel.id : model.id,
+			),
 			updatedAt: row?.updatedAt.toISOString() ?? null,
 		};
 	}
@@ -57,10 +64,13 @@ export class SettingsService {
 		}
 
 		const models = await this.catalog.models();
+		const providerLabel = process.env.OPENROUTER_API_KEY?.trim()
+			? "OpenRouter"
+			: "the AI Gateway";
 
 		if (!models) {
 			throw new BadRequestException(
-				"Could not reach the AI Gateway to check that model. Try again in a moment.",
+				`Could not reach ${providerLabel} to check that model. Try again in a moment.`,
 			);
 		}
 
@@ -68,7 +78,7 @@ export class SettingsService {
 
 		if (!chosen) {
 			throw new BadRequestException(
-				`The AI Gateway does not serve a tool-using model called "${modelId}".`,
+				`${providerLabel} does not serve a tool-using model called "${modelId}".`,
 			);
 		}
 

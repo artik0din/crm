@@ -1,7 +1,7 @@
-import { db } from "@crm/db";
 import { DEFAULT_AGENT_MODEL } from "@crm/db/settings";
 import { defineAgent, defineDynamic } from "eve";
 import { z } from "zod";
+import { selectedRunnerModel, selectedRunnerModelStep } from "../../lib/model";
 import { attribute, purposeOf } from "../../lib/session-purpose";
 
 export default defineAgent({
@@ -14,21 +14,13 @@ export default defineAgent({
 				if (purposeOf(ctx) !== "team-agent") return null;
 				const runId = attribute(ctx, "runId");
 				if (!runId) return null;
-
-				const run = await db.agentRun.findUnique({
-					where: { id: runId },
-					select: {
-						version: {
-							select: { modelId: true, modelContextWindowTokens: true },
-						},
-					},
-				});
-				return run
-					? {
-							model: run.version.modelId,
-							modelContextWindowTokens: run.version.modelContextWindowTokens,
-						}
-					: null;
+				return selectedRunnerModel(runId);
+			},
+			"step.started": async (_event, ctx) => {
+				if (purposeOf(ctx) !== "team-agent") return null;
+				const runId = attribute(ctx, "runId");
+				if (!runId) return null;
+				return selectedRunnerModelStep(runId);
 			},
 		},
 	}),
