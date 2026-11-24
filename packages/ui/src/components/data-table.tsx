@@ -122,6 +122,7 @@ export type DataTableProps<TRow, TSub> = {
 	empty?: ReactNode;
 	className?: string;
 	tableClassName?: string;
+	storageKey?: string;
 };
 
 const HIDE_BELOW_CLASS = {
@@ -137,6 +138,63 @@ const ALIGN_CLASS = {
 } as const;
 
 const DEFAULT_COLUMN_WIDTH_REM = 11;
+export const MIN_COLUMN_WIDTH_REM = 6;
+export const MAX_COLUMN_WIDTH_REM = 40;
+
+export function resizeColumnWidth(current: number, delta: number): number {
+	return Math.min(
+		MAX_COLUMN_WIDTH_REM,
+		Math.max(MIN_COLUMN_WIDTH_REM, Math.round((current + delta) * 10) / 10),
+	);
+}
+
+function readStoredWidths(key?: string): Record<string, number> {
+	if (!key) return {};
+	try {
+		const storage =
+			typeof window !== "undefined"
+				? window.localStorage
+				: typeof localStorage !== "undefined"
+					? localStorage
+					: undefined;
+		if (!storage) return {};
+		const raw = storage.getItem(key);
+		if (!raw) return {};
+		const parsed = JSON.parse(raw);
+		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+			const result: Record<string, number> = {};
+			for (const [colId, val] of Object.entries(parsed)) {
+				if (typeof val === "number" && !Number.isNaN(val)) {
+					result[colId] = Math.min(
+						MAX_COLUMN_WIDTH_REM,
+						Math.max(MIN_COLUMN_WIDTH_REM, val),
+					);
+				}
+			}
+			return result;
+		}
+	} catch {
+		return {};
+	}
+	return {};
+}
+
+function writeStoredWidths(
+	key: string | undefined,
+	widths: Record<string, number>,
+): void {
+	if (!key) return;
+	try {
+		const storage =
+			typeof window !== "undefined"
+				? window.localStorage
+				: typeof localStorage !== "undefined"
+					? localStorage
+					: undefined;
+		if (!storage) return;
+		storage.setItem(key, JSON.stringify(widths));
+	} catch {}
+}
 
 function parseWidthRem(width?: string): number {
 	if (!width) return DEFAULT_COLUMN_WIDTH_REM;
@@ -297,6 +355,7 @@ export function DataTable<TRow, TSub = unknown>({
 	empty,
 	className,
 	tableClassName,
+	storageKey,
 }: DataTableProps<TRow, TSub>) {
 	const [expandedIds, setExpandedIds] = useQueryState(
 		"expand",
@@ -312,8 +371,60 @@ export function DataTable<TRow, TSub = unknown>({
 		parseAsArrayOf(parseAsString).withDefault(defaultHiddenIds),
 	);
 	const [isScrolled, setIsScrolled] = useState(false);
+	const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() =>
+		readStoredWidths(storageKey),
+	);
 	const [filtersOpen, setFiltersOpen] = useState(false);
 	const filtersId = useId();
+
+	const updateColumnWidth = (columnId: string, width: number) => {
+		const clamped = resizeColumnWidth(width, 0);
+		setColumnWidths((prev) => {
+			const next = { ...prev, [columnId]: clamped };
+			writeStoredWidths(storageKey, next);
+			return next;
+		});
+	};
+
+	const startResize = (
+		columnId: string,
+		startWidth: number,
+		event: React.PointerEvent,
+	) => {
+		event.preventDefault();
+		event.stopPropagation();
+		const startX = event.clientX;
+
+		const handlePointerMove = (e: PointerEvent) => {
+			const deltaPx = e.clientX - startX;
+			const deltaRem = deltaPx / 16;
+			updateColumnWidth(columnId, startWidth + deltaRem);
+		};
+
+		const handlePointerUp = () => {
+			window.removeEventListener("pointermove", handlePointerMove);
+			window.removeEventListener("pointerup", handlePointerUp);
+		};
+
+		window.addEventListener("pointermove", handlePointerMove);
+		window.addEventListener("pointerup", handlePointerUp);
+	};
+
+	const handleResizeKey = (
+		columnId: string,
+		currentWidth: number,
+		event: React.KeyboardEvent,
+	) => {
+		if (event.key === "ArrowLeft") {
+			event.preventDefault();
+			event.stopPropagation();
+			updateColumnWidth(columnId, currentWidth - 1);
+		} else if (event.key === "ArrowRight") {
+			event.preventDefault();
+			event.stopPropagation();
+			updateColumnWidth(columnId, currentWidth + 1);
+		}
+	};
 
 	const hideable = columns.filter((column) => column.hideable !== false);
 	const visibleColumns = columns.filter(
@@ -634,7 +745,8 @@ export function DataTable<TRow, TSub = unknown>({
 						)}
 						{visibleColumns.map((column, index) => {
 							const isFirst = index === 0;
-							const widthRem = parseWidthRem(column.width);
+							const widthRem =
+								columnWidths[column.id] ?? parseWidthRem(column.width);
 							const isClassWidth =
 								column.width &&
 								(column.width.startsWith("w-") || column.width.includes(" "));
@@ -656,7 +768,7 @@ export function DataTable<TRow, TSub = unknown>({
 										maxWidth: `${widthRem}rem`,
 									}}
 									className={cn(
-										"h-11 overflow-hidden px-3 font-normal text-muted-foreground",
+										"relative h-11 overflow-hidden px-3 font-normal text-muted-foreground",
 										isClassWidth && column.width,
 										ALIGN_CLASS[column.align ?? "left"],
 										column.hideBelow && HIDE_BELOW_CLASS[column.hideBelow],
@@ -688,6 +800,23 @@ export function DataTable<TRow, TSub = unknown>({
 									) : (
 										column.header
 									)}
+									<div
+										role="separator"
+										aria-orientation="vertical"
+										aria-label={`Resize ${columnLabel(column)} column`}
+										aria-valuenow={Math.round(widthRem)}
+										aria-valuemin={MIN_COLUMN_WIDTH_REM}
+										aria-valuemax={MAX_COLUMN_WIDTH_REM}
+										tabIndex={0}
+										onPointerDown={(event) =>
+											startResize(column.id, widthRem, event)
+										}
+										onKeyDown={(event) =>
+											handleResizeKey(column.id, widthRem, event)
+										}
+										onClick={(event) => event.stopPropagation()}
+										className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize select-none touch-none hover:bg-border/60 focus-visible:bg-primary focus-visible:outline-none"
+									/>
 								</TableHead>
 							);
 						})}
@@ -770,7 +899,8 @@ export function DataTable<TRow, TSub = unknown>({
 									)}
 									{visibleColumns.map((column, index) => {
 										const isFirst = index === 0;
-										const widthRem = parseWidthRem(column.width);
+										const widthRem =
+											columnWidths[column.id] ?? parseWidthRem(column.width);
 										const isClassWidth =
 											column.width &&
 											(column.width.startsWith("w-") ||
@@ -842,7 +972,8 @@ export function DataTable<TRow, TSub = unknown>({
 												)}
 												{visibleColumns.map((column, index) => {
 													const isFirst = index === 0;
-													const widthRem = parseWidthRem(column.width);
+													const widthRem =
+														columnWidths[column.id] ?? parseWidthRem(column.width);
 													const isClassWidth =
 														column.width &&
 														(column.width.startsWith("w-") ||

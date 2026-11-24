@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { DataTable } from "@crm/ui/components/data-table";
+import {
+	DataTable,
+	MAX_COLUMN_WIDTH_REM,
+	MIN_COLUMN_WIDTH_REM,
+	resizeColumnWidth,
+} from "@crm/ui/components/data-table";
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -12,7 +17,7 @@ const mockQuery = {
 	filters: {},
 	setSort: () => {},
 	setDir: () => {},
-	setPage: () => {},
+	setPage: async () => {},
 	setTab: () => {},
 	setFilter: () => {},
 	toggleSort: () => {},
@@ -86,6 +91,106 @@ describe("DataTable sticky columns", () => {
 		expect(html).toContain("sticky z-30 bg-muted left-0 sm:left-10");
 		expect(html).toContain(
 			"sticky z-10 bg-card group-hover:bg-muted/60 group-data-[state=selected]:bg-muted left-0 sm:left-10",
+		);
+	});
+
+	it("applies column width persisted in storage", () => {
+		const originalStorage = globalThis.localStorage;
+		const store = new Map<string, string>([
+			["contacts-test", JSON.stringify({ name: 22 })],
+		]);
+		globalThis.localStorage = {
+			getItem: (key: string) => store.get(key) ?? null,
+			setItem: (key: string, value: string) => {
+				store.set(key, value);
+			},
+			removeItem: (key: string) => {
+				store.delete(key);
+			},
+			clear: () => {
+				store.clear();
+			},
+			length: store.size,
+			key: () => null,
+		};
+
+		try {
+			const html = renderToStaticMarkup(
+				<NuqsTestingAdapter>
+					<DataTable
+						storageKey="contacts-test"
+						query={mockQuery}
+						columns={[
+							{
+								id: "name",
+								header: "Name",
+								width: "16rem",
+								cell: (row: { id: string; name: string }) => row.name,
+							},
+						]}
+						getRowId={(row) => row.id}
+						rows={[{ id: "1", name: "Alice" }]}
+						total={1}
+					/>
+				</NuqsTestingAdapter>,
+			);
+
+			expect(html).toContain("width:22rem;min-width:22rem;max-width:22rem");
+		} finally {
+			globalThis.localStorage = originalStorage;
+		}
+	});
+
+	it("renders safely when storage throws an exception", () => {
+		const originalStorage = globalThis.localStorage;
+		globalThis.localStorage = {
+			getItem: () => {
+				throw new Error("QuotaExceededError");
+			},
+			setItem: () => {
+				throw new Error("QuotaExceededError");
+			},
+			removeItem: () => {},
+			clear: () => {},
+			length: 0,
+			key: () => null,
+		};
+
+		try {
+			const html = renderToStaticMarkup(
+				<NuqsTestingAdapter>
+					<DataTable
+						storageKey="broken-storage"
+						query={mockQuery}
+						columns={[
+							{
+								id: "name",
+								header: "Name",
+								width: "16rem",
+								cell: (row: { id: string; name: string }) => row.name,
+							},
+						]}
+						getRowId={(row) => row.id}
+						rows={[{ id: "1", name: "Alice" }]}
+						total={1}
+					/>
+				</NuqsTestingAdapter>,
+			);
+
+			expect(html).toContain("width:16rem;min-width:16rem;max-width:16rem");
+		} finally {
+			globalThis.localStorage = originalStorage;
+		}
+	});
+
+	it("changes width with keyboard within boundaries", () => {
+		expect(resizeColumnWidth(16, 1)).toBe(17);
+		expect(resizeColumnWidth(16, -1)).toBe(15);
+		expect(resizeColumnWidth(MIN_COLUMN_WIDTH_REM, -2)).toBe(
+			MIN_COLUMN_WIDTH_REM,
+		);
+		expect(resizeColumnWidth(MAX_COLUMN_WIDTH_REM, 5)).toBe(
+			MAX_COLUMN_WIDTH_REM,
 		);
 	});
 });

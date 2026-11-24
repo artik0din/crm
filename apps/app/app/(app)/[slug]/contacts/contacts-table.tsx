@@ -271,6 +271,7 @@ export function ContactsTable() {
 
 	return (
 		<DataTable
+			storageKey="contacts"
 			query={query}
 			search={<ListSearch placeholder="Search by name, email or company…" />}
 			actions={

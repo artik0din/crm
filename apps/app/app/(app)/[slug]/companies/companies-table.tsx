@@ -250,6 +250,7 @@ export function CompaniesTable() {
 
 	return (
 		<DataTable
+			storageKey="companies"
 			query={query}
 			search={<ListSearch placeholder="Search companies by name or domain…" />}
 			actions={

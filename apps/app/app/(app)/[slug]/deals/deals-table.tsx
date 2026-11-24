@@ -233,6 +233,7 @@ export function DealsTable() {
 
 	return (
 		<DataTable
+			storageKey="deals"
 			query={query}
 			search={<ListSearch placeholder="Search deals by name or company…" />}
 			actions={
