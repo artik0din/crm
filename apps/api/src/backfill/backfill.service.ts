@@ -64,24 +64,35 @@ export class BackfillService implements OnModuleInit {
 	}
 
 	async auto(): Promise<{ started: boolean }> {
-		if (!AGENT_DISPATCH.automaticEnrichment) return { started: false };
 		if (await this.cache.get(AUTO_KEY)) return { started: false };
 		await this.cache.set(AUTO_KEY, true, AUTO_EVERY_MS);
 
 		void (async () => {
 			try {
-				await this.sweepWorkspace();
+				let queued = 0;
+				let remaining = 0;
+				let iconsResolving = 0;
 
-				const companies = await this.runCompanies(false);
-				const contacts = await this.runContacts();
+				if (AGENT_DISPATCH.automaticEnrichment) {
+					await this.sweepWorkspace();
+
+					const companies = await this.runCompanies(false);
+					const contacts = await this.runContacts();
+
+					queued = companies.queued + contacts.queued;
+					remaining = companies.remaining + contacts.remaining;
+					iconsResolving = companies.iconsResolving;
+				} else {
+					iconsResolving = await this.sweepFavicons();
+				}
 
 				const mirrored = await this.images.sweep();
 
 				this.logger.log({
 					message: "Automatic backfill swept",
-					queued: companies.queued + contacts.queued,
-					remaining: companies.remaining + contacts.remaining,
-					iconsResolving: companies.iconsResolving,
+					queued,
+					remaining,
+					iconsResolving,
 					imagesMirrored: mirrored.copied,
 				});
 			} catch (error) {

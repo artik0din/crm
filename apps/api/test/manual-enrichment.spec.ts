@@ -1,8 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { db } from "@crm/db";
 import { PRIORITY } from "@crm/db/agent-tasks";
+import type { Cache } from "cache-manager";
 import { AGENT_DISPATCH } from "../src/agent/agent-dispatch.config";
 import { AgentTriggerService } from "../src/agent/agent-trigger.service";
+import { BackfillService } from "../src/backfill/backfill.service";
+import { FaviconService } from "../src/backfill/favicon.service";
+import { ImageMirrorService } from "../src/backfill/image-mirror.service";
 import { CompaniesService } from "../src/companies/companies.service";
 import { ContactsService } from "../src/contacts/contacts.service";
 
@@ -33,17 +37,31 @@ let contactId: string;
 let companyId: string;
 
 async function clean() {
-	if (contactId) {
-		await db.agentTask.deleteMany({ where: { contactId } });
-		await db.contact.deleteMany({ where: { id: contactId } });
+	const [contacts, companies] = await Promise.all([
+		db.contact.findMany({
+			where: { email: contactEmail },
+			select: { id: true },
+		}),
+		db.company.findMany({
+			where: { name: companyName },
+			select: { id: true },
+		}),
+	]);
+	const cIds = contacts.map((c) => c.id);
+	const compIds = companies.map((c) => c.id);
+	if (cIds.length > 0) {
+		await db.agentTask.deleteMany({ where: { contactId: { in: cIds } } });
+		await db.contact.deleteMany({ where: { id: { in: cIds } } });
 	}
-	if (companyId) {
-		await db.agentTask.deleteMany({ where: { companyId } });
-		await db.company.deleteMany({ where: { id: companyId } });
+	if (compIds.length > 0) {
+		await db.agentTask.deleteMany({ where: { companyId: { in: compIds } } });
+		await db.company.deleteMany({ where: { id: { in: compIds } } });
 	}
 }
 
 beforeAll(async () => {
+	await clean();
+
 	const contact = await db.contact.create({
 		data: {
 			firstName: "Enrich",
@@ -112,5 +130,44 @@ describe("manual-only enrichment", () => {
 
 		expect(tasks).toHaveLength(1);
 		expect(tasks[0]?.priority).toBe(PRIORITY.requested);
+	});
+
+	it("runs image mirroring and favicon sweeps during auto backfill when automatic enrichment is disabled", async () => {
+		let imagesSwept = false;
+		let agentCalled = false;
+		const mockImages = {
+			sweep: async () => {
+				imagesSwept = true;
+				return { scanned: 0, copied: 0, failed: 0 };
+			},
+		} as unknown as ImageMirrorService;
+		const mockAgent = {
+			sweepWorkspace: async () => {
+				agentCalled = true;
+			},
+			backfill: async () => {
+				agentCalled = true;
+				return { queued: 0, alreadyQueued: 0 };
+			},
+		} as unknown as AgentTriggerService;
+		const mockCache = {
+			get: async () => null,
+			set: async () => {},
+		} as unknown as Cache;
+		const mockFavicon = {} as unknown as FaviconService;
+
+		const backfill = new BackfillService(
+			db,
+			mockAgent,
+			mockFavicon,
+			mockImages,
+			mockCache,
+		);
+
+		const result = await backfill.auto();
+		expect(result).toEqual({ started: true });
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(imagesSwept).toBe(true);
+		expect(agentCalled).toBe(false);
 	});
 });
