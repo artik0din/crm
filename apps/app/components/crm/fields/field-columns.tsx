@@ -11,6 +11,16 @@ import type { FieldEntity } from "./fields-entity";
 
 type WithFields = { fields: Record<string, string | number | boolean | null> };
 
+const SORTABLE_FIELD_TYPES = new Set([
+	"NUMBER",
+	"TEXT",
+	"LONG_TEXT",
+	"URL",
+	"EMAIL",
+	"PHONE",
+	"CHECKBOX",
+]);
+
 function render(
 	type: string,
 	value: string | number | boolean | null,
@@ -56,6 +66,7 @@ export function useFieldColumns<Row extends WithFields>(
 			.map((field) => ({
 				id: `field:${field.key}`,
 				header: field.label,
+				sortable: SORTABLE_FIELD_TYPES.has(field.type),
 				width: "w-[12%]",
 				hideBelow: "lg" as const,
 				cell: (row: Row) => (
