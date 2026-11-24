@@ -53,6 +53,7 @@ import {
 	useEffect,
 	useId,
 	useMemo,
+	useRef,
 	useState,
 } from "react";
 
@@ -192,6 +193,87 @@ function parseWidthRem(width?: string): number {
 	const twMatch = width.match(/^w-(\d+)$/);
 	if (twMatch?.[1]) return parseInt(twMatch[1], 10) / 4;
 	return DEFAULT_COLUMN_WIDTH_REM;
+}
+
+export type ColumnDragOptions = {
+	columnId: string;
+	startWidth: number;
+	startX: number;
+	pointerId: number;
+	target?: {
+		setPointerCapture?: (id: number) => void;
+		releasePointerCapture?: (id: number) => void;
+		hasPointerCapture?: (id: number) => boolean;
+	} | null;
+	onMove: (width: number) => void;
+	onEnd: () => void;
+};
+
+export function startColumnDrag({
+	columnId,
+	startWidth,
+	startX,
+	pointerId,
+	target,
+	onMove,
+	onEnd,
+}: ColumnDragOptions): () => void {
+	try {
+		target?.setPointerCapture?.(pointerId);
+	} catch {}
+
+	let ended = false;
+	const handleEnd = () => {
+		if (ended) return;
+		ended = true;
+		cleanup();
+		onEnd();
+	};
+
+	const handlePointerMove = (e: PointerEvent) => {
+		if (!e.isPrimary) return;
+		const deltaPx = e.clientX - startX;
+		const deltaRem = deltaPx / 16;
+		onMove(resizeColumnWidth(startWidth + deltaRem, 0));
+	};
+
+	const handlePointerUp = (e: PointerEvent) => {
+		if (e.pointerId !== pointerId) return;
+		handleEnd();
+	};
+
+	const handlePointerCancel = (e: PointerEvent) => {
+		if (e.pointerId !== pointerId) return;
+		handleEnd();
+	};
+
+	const handleLostCapture = (e: PointerEvent) => {
+		if (e.pointerId !== pointerId) return;
+		handleEnd();
+	};
+
+	const cleanup = () => {
+		if (typeof window !== "undefined") {
+			window.removeEventListener("pointermove", handlePointerMove);
+			window.removeEventListener("pointerup", handlePointerUp);
+			window.removeEventListener("pointercancel", handlePointerCancel);
+			window.removeEventListener("lostpointercapture", handleLostCapture);
+		}
+		try {
+			if (target?.hasPointerCapture?.(pointerId)) {
+				target.releasePointerCapture?.(pointerId);
+			}
+		} catch {}
+	};
+
+	if (typeof window !== "undefined") {
+		window.addEventListener("pointermove", handlePointerMove);
+		window.addEventListener("pointerup", handlePointerUp);
+		window.addEventListener("pointercancel", handlePointerCancel);
+		window.addEventListener("lostpointercapture", handleLostCapture);
+	}
+
+	return cleanup;
 }
 
 function columnLabel<TRow>(column: DataTableColumn<TRow>): string {
@@ -370,38 +452,41 @@ export function DataTable<TRow, TSub = unknown>({
 	}, [storageKey]);
 	const [filtersOpen, setFiltersOpen] = useState(false);
 	const filtersId = useId();
+	const dragCleanupRef = useRef<(() => void) | null>(null);
 
-	const updateColumnWidth = (columnId: string, width: number) => {
-		const clamped = resizeColumnWidth(width, 0);
-		setColumnWidths((prev) => {
-			const next = { ...prev, [columnId]: clamped };
-			writeStoredWidths(storageKey, next);
-			return next;
-		});
-	};
+	useEffect(() => {
+		return () => {
+			dragCleanupRef.current?.();
+		};
+	}, []);
 
 	const startResize = (
 		columnId: string,
 		startWidth: number,
 		event: React.PointerEvent,
 	) => {
+		if (event.button !== 0 || !event.isPrimary) return;
 		event.preventDefault();
 		event.stopPropagation();
-		const startX = event.clientX;
 
-		const handlePointerMove = (e: PointerEvent) => {
-			const deltaPx = e.clientX - startX;
-			const deltaRem = deltaPx / 16;
-			updateColumnWidth(columnId, startWidth + deltaRem);
-		};
-
-		const handlePointerUp = () => {
-			window.removeEventListener("pointermove", handlePointerMove);
-			window.removeEventListener("pointerup", handlePointerUp);
-		};
-
-		window.addEventListener("pointermove", handlePointerMove);
-		window.addEventListener("pointerup", handlePointerUp);
+		dragCleanupRef.current?.();
+		dragCleanupRef.current = startColumnDrag({
+			columnId,
+			startWidth,
+			startX: event.clientX,
+			pointerId: event.pointerId,
+			target: event.currentTarget,
+			onMove: (newWidth) => {
+				setColumnWidths((prev) => ({ ...prev, [columnId]: newWidth }));
+			},
+			onEnd: () => {
+				dragCleanupRef.current = null;
+				setColumnWidths((prev) => {
+					writeStoredWidths(storageKey, prev);
+					return prev;
+				});
+			},
+		});
 	};
 
 	const handleResizeKey = (
@@ -412,11 +497,21 @@ export function DataTable<TRow, TSub = unknown>({
 		if (event.key === "ArrowLeft") {
 			event.preventDefault();
 			event.stopPropagation();
-			updateColumnWidth(columnId, currentWidth - 1);
+			const next = resizeColumnWidth(currentWidth, -1);
+			setColumnWidths((prev) => {
+				const updated = { ...prev, [columnId]: next };
+				writeStoredWidths(storageKey, updated);
+				return updated;
+			});
 		} else if (event.key === "ArrowRight") {
 			event.preventDefault();
 			event.stopPropagation();
-			updateColumnWidth(columnId, currentWidth + 1);
+			const next = resizeColumnWidth(currentWidth, 1);
+			setColumnWidths((prev) => {
+				const updated = { ...prev, [columnId]: next };
+				writeStoredWidths(storageKey, updated);
+				return updated;
+			});
 		}
 	};
 

@@ -5,6 +5,7 @@ import {
 	MIN_COLUMN_WIDTH_REM,
 	readStoredWidths,
 	resizeColumnWidth,
+	startColumnDrag,
 } from "@crm/ui/components/data-table";
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -54,7 +55,7 @@ describe("DataTable sticky columns", () => {
 		expect(html).toContain("table-fixed w-full");
 		expect(html).toContain("w-[40%]");
 		expect(html).toContain("w-[60%]");
-		expect(html).not.toContain("role=\"separator\"");
+		expect(html).not.toContain('role="separator"');
 		expect(html).not.toContain("sticky z-");
 		expect(html).not.toContain("width:11rem");
 	});
@@ -126,7 +127,9 @@ describe("DataTable sticky columns", () => {
 		);
 
 		expect(html).toContain("sticky left-0 z-30 bg-muted h-11 w-10");
-		expect(html).toContain("sm:sticky sm:z-30 bg-muted sm:max-w-[45vw] left-0 sm:left-10");
+		expect(html).toContain(
+			"sm:sticky sm:z-30 bg-muted sm:max-w-[45vw] left-0 sm:left-10",
+		);
 		expect(html).toContain(
 			"sm:sticky sm:z-10 bg-card group-hover:bg-muted/60 group-data-[state=selected]:bg-muted sm:max-w-[45vw] left-0 sm:left-10",
 		);
@@ -276,7 +279,10 @@ describe("DataTable sticky columns", () => {
 	it("reads stored widths correctly in client storage", () => {
 		const originalWindow = globalThis.window;
 		const store = new Map<string, string>([
-			["contacts-test", JSON.stringify({ name: 22, title: 50, invalid: "NaN" })],
+			[
+				"contacts-test",
+				JSON.stringify({ name: 22, title: 50, invalid: "NaN" }),
+			],
 		]);
 		const mockStorage = {
 			getItem: (key: string) => store.get(key) ?? null,
@@ -292,8 +298,8 @@ describe("DataTable sticky columns", () => {
 			length: store.size,
 			key: () => null,
 		};
-		// @ts-expect-error mock window
-		globalThis.window = {
+		const winScope = globalThis as unknown as { window: unknown };
+		winScope.window = {
 			localStorage: mockStorage,
 		};
 
@@ -303,8 +309,7 @@ describe("DataTable sticky columns", () => {
 			expect(widths.title).toBe(MAX_COLUMN_WIDTH_REM);
 			expect(widths.invalid).toBeUndefined();
 		} finally {
-			// @ts-expect-error restore window
-			globalThis.window = originalWindow;
+			winScope.window = originalWindow;
 		}
 	});
 
@@ -359,5 +364,219 @@ describe("DataTable sticky columns", () => {
 		expect(resizeColumnWidth(MAX_COLUMN_WIDTH_REM, 5)).toBe(
 			MAX_COLUMN_WIDTH_REM,
 		);
+	});
+});
+
+describe("DataTable pointer drag resize", () => {
+	type MockEvent = {
+		clientX?: number;
+		button?: number;
+		isPrimary?: boolean;
+		pointerId?: number;
+	};
+	function createMockWindow() {
+		const listeners = new Map<string, Set<(e: MockEvent) => void>>();
+		return {
+			addEventListener: (event: string, fn: (e: MockEvent) => void) => {
+				if (!listeners.has(event)) listeners.set(event, new Set());
+				listeners.get(event)?.add(fn);
+			},
+			removeEventListener: (event: string, fn: (e: MockEvent) => void) => {
+				listeners.get(event)?.delete(fn);
+			},
+			dispatch: (event: string, payload: MockEvent) => {
+				listeners.get(event)?.forEach((fn) => {
+					fn(payload);
+				});
+			},
+			hasListener: (event: string) => (listeners.get(event)?.size ?? 0) > 0,
+		};
+	}
+
+	it("captures pointer, updates width on move, and completes on pointerup", () => {
+		const originalWindow = globalThis.window;
+		const mockWin = createMockWindow();
+		const winScope = globalThis as unknown as { window: unknown };
+		winScope.window = mockWin;
+
+		const captured = { id: null as number | null };
+		const released = { id: null as number | null };
+		const target = {
+			setPointerCapture: (id: number) => {
+				captured.id = id;
+			},
+			releasePointerCapture: (id: number) => {
+				released.id = id;
+			},
+			hasPointerCapture: (id: number) => captured.id === id,
+		};
+
+		const moves: number[] = [];
+		let ended = false;
+
+		try {
+			startColumnDrag({
+				columnId: "name",
+				startWidth: 16,
+				startX: 100,
+				pointerId: 1,
+				target,
+				onMove: (w) => moves.push(w),
+				onEnd: () => {
+					ended = true;
+				},
+			});
+
+			expect(captured.id).toBe(1);
+			expect(mockWin.hasListener("pointermove")).toBe(true);
+
+			mockWin.dispatch("pointermove", {
+				clientX: 132,
+				isPrimary: true,
+				pointerId: 1,
+			});
+			mockWin.dispatch("pointermove", {
+				clientX: 148,
+				isPrimary: true,
+				pointerId: 1,
+			});
+
+			expect(moves).toEqual([18, 19]);
+			expect(ended).toBe(false);
+
+			mockWin.dispatch("pointermove", {
+				clientX: 200,
+				isPrimary: false,
+				pointerId: 2,
+			});
+			expect(moves).toEqual([18, 19]);
+
+			mockWin.dispatch("pointerup", {
+				pointerId: 1,
+				isPrimary: true,
+			});
+
+			expect(ended).toBe(true);
+			expect(released.id).toBe(1);
+			expect(mockWin.hasListener("pointermove")).toBe(false);
+			expect(mockWin.hasListener("pointerup")).toBe(false);
+		} finally {
+			winScope.window = originalWindow;
+		}
+	});
+
+	it("ends drag safely and cleans up listeners on pointercancel", () => {
+		const originalWindow = globalThis.window;
+		const mockWin = createMockWindow();
+		const winScope = globalThis as unknown as { window: unknown };
+		winScope.window = mockWin;
+
+		let ended = false;
+		const released = { id: null as number | null };
+		const target = {
+			setPointerCapture: () => {},
+			releasePointerCapture: (id: number) => {
+				released.id = id;
+			},
+			hasPointerCapture: () => true,
+		};
+
+		try {
+			startColumnDrag({
+				columnId: "name",
+				startWidth: 16,
+				startX: 100,
+				pointerId: 5,
+				target,
+				onMove: () => {},
+				onEnd: () => {
+					ended = true;
+				},
+			});
+
+			mockWin.dispatch("pointercancel", {
+				pointerId: 5,
+				isPrimary: true,
+			});
+
+			expect(ended).toBe(true);
+			expect(released.id).toBe(5);
+			expect(mockWin.hasListener("pointermove")).toBe(false);
+		} finally {
+			winScope.window = originalWindow;
+		}
+	});
+
+	it("ends drag safely on lostpointercapture", () => {
+		const originalWindow = globalThis.window;
+		const mockWin = createMockWindow();
+		const winScope = globalThis as unknown as { window: unknown };
+		winScope.window = mockWin;
+
+		let ended = false;
+		const target = {
+			setPointerCapture: () => {},
+			releasePointerCapture: () => {},
+			hasPointerCapture: () => false,
+		};
+
+		try {
+			startColumnDrag({
+				columnId: "name",
+				startWidth: 16,
+				startX: 100,
+				pointerId: 7,
+				target,
+				onMove: () => {},
+				onEnd: () => {
+					ended = true;
+				},
+			});
+
+			mockWin.dispatch("lostpointercapture", {
+				pointerId: 7,
+				isPrimary: true,
+			});
+
+			expect(ended).toBe(true);
+			expect(mockWin.hasListener("pointermove")).toBe(false);
+		} finally {
+			winScope.window = originalWindow;
+		}
+	});
+
+	it("removes event listeners on unmount cleanup", () => {
+		const originalWindow = globalThis.window;
+		const mockWin = createMockWindow();
+		const winScope = globalThis as unknown as { window: unknown };
+		winScope.window = mockWin;
+
+		let ended = false;
+		const target = {
+			setPointerCapture: () => {},
+			releasePointerCapture: () => {},
+			hasPointerCapture: () => false,
+		};
+
+		try {
+			const cleanup = startColumnDrag({
+				columnId: "name",
+				startWidth: 16,
+				startX: 100,
+				pointerId: 3,
+				target,
+				onMove: () => {},
+				onEnd: () => {
+					ended = true;
+				},
+			});
+
+			expect(mockWin.hasListener("pointermove")).toBe(true);
+			cleanup();
+			expect(mockWin.hasListener("pointermove")).toBe(false);
+			expect(ended).toBe(false);
+		} finally {
+			winScope.window = originalWindow;
+		}
 	});
 });
