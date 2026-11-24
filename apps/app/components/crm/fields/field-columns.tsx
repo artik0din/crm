@@ -1,5 +1,6 @@
 "use client";
 
+import { SORTABLE_FIELD_TYPES } from "@crm/db/fields";
 import type { DataTableColumn } from "@crm/ui/components/data-table";
 import { EmptyCellValue } from "@crm/ui/components/empty-cell";
 import { formatDay } from "@crm/ui/lib/format";
@@ -11,15 +12,7 @@ import type { FieldEntity } from "./fields-entity";
 
 type WithFields = { fields: Record<string, string | number | boolean | null> };
 
-const SORTABLE_FIELD_TYPES = new Set([
-	"NUMBER",
-	"TEXT",
-	"LONG_TEXT",
-	"URL",
-	"EMAIL",
-	"PHONE",
-	"CHECKBOX",
-]);
+const SORTABLE_FIELD_TYPES_SET = new Set<string>(SORTABLE_FIELD_TYPES);
 
 function render(
 	type: string,
@@ -66,7 +59,7 @@ export function useFieldColumns<Row extends WithFields>(
 			.map((field) => ({
 				id: `field:${field.key}`,
 				header: field.label,
-				sortable: SORTABLE_FIELD_TYPES.has(field.type),
+				sortable: SORTABLE_FIELD_TYPES_SET.has(field.type),
 				width: "w-[12%]",
 				hideBelow: "lg" as const,
 				cell: (row: Row) => (

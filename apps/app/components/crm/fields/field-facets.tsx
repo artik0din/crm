@@ -1,25 +1,23 @@
 "use client";
 
+import { NUMBER_BUCKETS, TEXT_FILTERABLE_FIELD_TYPES } from "@crm/db/fields";
 import type { DataTableFacet } from "@crm/ui/components/data-table";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTRPC } from "@/lib/trpc/client";
 import type { FieldEntity } from "./fields-entity";
 
-const NUMBER_BUCKET_OPTIONS = [
-	{ value: "lt:1000", label: "< 1k" },
-	{ value: "1000:10000", label: "1k–10k" },
-	{ value: "10000:50000", label: "10k–50k" },
-	{ value: "50000:100000", label: "50k–100k" },
-	{ value: "gte:100000", label: "100k+" },
-] as const;
+const NUMBER_BUCKET_OPTIONS = NUMBER_BUCKETS.map((bucket) => ({
+	value: bucket.id,
+	label: bucket.label,
+}));
 
 const CHECKBOX_OPTIONS = [
 	{ value: "true", label: "Yes" },
 	{ value: "false", label: "No" },
 ] as const;
 
-const TEXT_FIELD_TYPES = new Set(["TEXT", "URL", "EMAIL", "PHONE"]);
+const TEXT_FIELD_TYPES = new Set<string>(TEXT_FILTERABLE_FIELD_TYPES);
 
 export function useFieldFacets(
 	entity: FieldEntity,

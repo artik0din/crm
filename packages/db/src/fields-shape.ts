@@ -78,6 +78,70 @@ export function recordColumn(entity: FieldEntityName): RecordIdColumn {
 	return RECORD_ID_COLUMNS[entity];
 }
 
+export const SORTABLE_FIELD_TYPES = [
+	"NUMBER",
+	"TEXT",
+	"LONG_TEXT",
+	"URL",
+	"EMAIL",
+	"PHONE",
+	"CHECKBOX",
+] as const satisfies readonly FieldTypeName[];
+
+export type SortableFieldType = (typeof SORTABLE_FIELD_TYPES)[number];
+
+export const FILTERABLE_FIELD_TYPES = [
+	"SELECT",
+	"USER",
+	"NUMBER",
+	"CHECKBOX",
+	"TEXT",
+	"URL",
+	"EMAIL",
+	"PHONE",
+] as const satisfies readonly FieldTypeName[];
+
+export type FilterableFieldType = (typeof FILTERABLE_FIELD_TYPES)[number];
+
+export const TEXT_FILTERABLE_FIELD_TYPES = [
+	"TEXT",
+	"URL",
+	"EMAIL",
+	"PHONE",
+] as const satisfies readonly FieldTypeName[];
+
+export type TextFilterableFieldType =
+	(typeof TEXT_FILTERABLE_FIELD_TYPES)[number];
+
+export type NumberBucket = {
+	id: string;
+	label: string;
+	gte?: number;
+	lt?: number;
+};
+
+export const NUMBER_BUCKETS = [
+	{ id: "lt:1000", label: "< 1k", lt: 1000 },
+	{ id: "1000:10000", label: "1k–10k", gte: 1000, lt: 10000 },
+	{ id: "10000:50000", label: "10k–50k", gte: 10000, lt: 50000 },
+	{ id: "50000:100000", label: "50k–100k", gte: 50000, lt: 100000 },
+	{ id: "gte:100000", label: "100k+", gte: 100000 },
+] as const;
+
+export type NumberBucketDefinition = (typeof NUMBER_BUCKETS)[number];
+
+export function isFilterableFieldType(
+	type: FieldTypeName,
+): type is FilterableFieldType {
+	return (FILTERABLE_FIELD_TYPES as readonly string[]).includes(type);
+}
+
+export function isSortableFieldType(
+	type: FieldTypeName,
+): type is SortableFieldType {
+	return (SORTABLE_FIELD_TYPES as readonly string[]).includes(type);
+}
+
 const RESERVED_KEYS = new Set([
 	"id",
 	"createdat",
