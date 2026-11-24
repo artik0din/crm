@@ -26,15 +26,22 @@ const chatResponseSchema = z.object({
 					.object({
 						content: z.string().catch(""),
 						annotations: z
-							.array(z.object({ url: z.string().catch("") }))
+							.array(
+								z.object({
+									type: z.string().catch(""),
+									url_citation: z
+										.object({
+											url: z.string().catch(""),
+										})
+										.optional(),
+								}),
+							)
 							.catch([]),
 					})
 					.catch({ content: "", annotations: [] }),
 			}),
 		)
 		.catch([]),
-	citations: z.array(z.string()).catch([]),
-	search_results: z.array(z.object({ url: z.string().catch("") })).catch([]),
 });
 
 type ChatRequestBody = {
@@ -91,17 +98,10 @@ export async function ask(
 		if (!text) return { ok: false, reason: "Empty answer." };
 
 		const citations: string[] = [];
-		for (const url of body.citations) {
-			if (url && !citations.includes(url)) citations.push(url);
-		}
 		for (const annotation of body.choices[0]?.message.annotations ?? []) {
-			if (annotation.url && !citations.includes(annotation.url)) {
-				citations.push(annotation.url);
-			}
-		}
-		for (const result of body.search_results) {
-			if (result.url && !citations.includes(result.url)) {
-				citations.push(result.url);
+			const url = annotation.url_citation?.url?.trim();
+			if (url && !citations.includes(url)) {
+				citations.push(url);
 			}
 		}
 

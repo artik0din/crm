@@ -49,12 +49,15 @@ describe("web-research ask", () => {
 						{
 							message: {
 								content: "Acme makes anvils.",
-								annotations: [{ url: "https://example.com/annotated" }],
+								annotations: [
+									{
+										type: "url_citation",
+										url_citation: { url: "https://example.com/annotated" },
+									},
+								],
 							},
 						},
 					],
-					citations: ["https://example.com/citation"],
-					search_results: [{ url: "https://example.com/search" }],
 				}),
 				{ status: 200, headers: { "content-type": "application/json" } },
 			);
@@ -78,9 +81,9 @@ describe("web-research ask", () => {
 		expect(result.ok).toBe(true);
 		if (result.ok) {
 			expect(result.data.text).toBe("Acme makes anvils.");
-			expect(result.data.citations).toContain("https://example.com/annotated");
-			expect(result.data.citations).toContain("https://example.com/citation");
-			expect(result.data.citations).toContain("https://example.com/search");
+			expect(result.data.citations).toEqual([
+				"https://example.com/annotated",
+			]);
 		}
 	});
 
