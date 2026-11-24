@@ -650,7 +650,6 @@ export class FieldsService {
 				definition.type,
 			),
 		);
-		const textIds = textFields.map((definition) => definition.id);
 		const numberFields = definitions.filter(
 			(definition) => definition.type === "NUMBER",
 		);
@@ -690,21 +689,33 @@ export class FieldsService {
 							_count: { _all: true },
 						})
 					: [],
-				textIds.length > 0
-					? this.db.fieldValue.groupBy({
-							by: ["fieldId", "text"],
-							where: {
-								fieldId: { in: textIds },
-								text: { not: null },
-								[relation]: relationWhere,
-							} as Prisma.FieldValueWhereInput,
-							_count: { _all: true },
-						})
+				textFields.length > 0
+					? Promise.all(
+							textFields.map(async (field) => {
+								const groups = await this.db.fieldValue.groupBy({
+									by: ["text"],
+									where: {
+										fieldId: field.id,
+										text: { not: null },
+										[relation]: relationWhere,
+									} as Prisma.FieldValueWhereInput,
+									_count: { text: true },
+									orderBy: { _count: { text: "desc" } },
+									take: FIELDS_CONFIG.filter.textMaxOptions,
+								});
+								return { key: field.key, groups };
+							}),
+						)
 					: [],
 				numberFields.length > 0
 					? Promise.all(
-							numberFields.flatMap((field) =>
-								FIELDS_CONFIG.filter.numberBuckets.map(async (bucket) => {
+							numberFields.map(async (field) => {
+								const results: Array<{
+									key: string;
+									id: string;
+									count: number;
+								}> = [];
+								for (const bucket of FIELDS_CONFIG.filter.numberBuckets) {
 									const count = await this.db.fieldValue.count({
 										where: {
 											fieldId: field.id,
@@ -712,10 +723,11 @@ export class FieldsService {
 											[relation]: relationWhere,
 										} as Prisma.FieldValueWhereInput,
 									});
-									return { key: field.key, id: bucket.id, count };
-								}),
-							),
-						)
+									results.push({ key: field.key, id: bucket.id, count });
+								}
+								return results;
+							}),
+						).then((nested) => nested.flat())
 					: [],
 			]);
 
@@ -745,24 +757,11 @@ export class FieldsService {
 			bucket[key] = (bucket[key] ?? 0) + group._count._all;
 		}
 
-		const textGroupsByField = new Map<
-			string,
-			Array<{ text: string; count: number }>
-		>();
-		for (const group of textGroups) {
-			const definition = byId.get(group.fieldId);
-			if (!definition || !group.text || group.text.trim() === "") continue;
-			const list = textGroupsByField.get(definition.key) ?? [];
-			list.push({ text: group.text, count: group._count._all });
-			textGroupsByField.set(definition.key, list);
-		}
-
-		for (const [key, items] of textGroupsByField) {
-			items.sort((a, b) => b.count - a.count);
-			const capped = items.slice(0, FIELDS_CONFIG.filter.textMaxOptions);
+		for (const { key, groups } of textGroups) {
 			const bucket: Record<string, number> = {};
-			for (const item of capped) {
-				bucket[item.text] = item.count;
+			for (const group of groups) {
+				if (!group.text || group.text.trim() === "") continue;
+				bucket[group.text] = group._count.text;
 			}
 			facetCounts[key] = bucket;
 		}

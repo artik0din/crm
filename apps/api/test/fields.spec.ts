@@ -1104,4 +1104,55 @@ describe("filtering lists by custom field", () => {
 			[coL1, coL2, coT1].sort(),
 		);
 	});
+
+	it("bounds TEXT facets to the configured cap ordered by frequency", async () => {
+		const textField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec cap domain",
+			type: "TEXT",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: false,
+			showOnFilter: true,
+		});
+
+		const coTop1 = await makeCompany("filt-cap-top1");
+		const coTop2 = await makeCompany("filt-cap-top2");
+		await fields.applyValues(db, "COMPANY", coTop1, {
+			[textField.key]: "TopChoice",
+		});
+		await fields.applyValues(db, "COMPANY", coTop2, {
+			[textField.key]: "TopChoice",
+		});
+
+		for (let i = 0; i < 55; i++) {
+			const co = await makeCompany(`filt-cap-${i}`);
+			await fields.applyValues(db, "COMPANY", co, {
+				[textField.key]: `Value-${i}`,
+			});
+		}
+
+		const result = await companies.list({
+			q: "filt-cap",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+
+		const counts = result.facetCounts[`field:${textField.key}`];
+		expect(counts).toBeDefined();
+		expect(Object.keys(counts ?? {}).length).toBe(50);
+		expect(counts?.["TopChoice"]).toBe(2);
+	});
 });
