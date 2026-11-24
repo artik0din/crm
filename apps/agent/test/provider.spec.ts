@@ -34,10 +34,10 @@ describe("provider selection", () => {
 		expect(getProvider()).toBe("none");
 	});
 
-	it("rejects a blank OPENROUTER_API_KEY", () => {
+	it("treats a blank OPENROUTER_API_KEY as unset", () => {
 		process.env.OPENROUTER_API_KEY = "   ";
-		expect(() => validateStartup()).toThrow();
-		expect(() => getProvider()).toThrow();
+		expect(() => validateStartup()).not.toThrow();
+		expect(getProvider()).toBe("none");
 	});
 
 	it("rejects an OPENROUTER_API_KEY missing the sk-or- prefix", () => {

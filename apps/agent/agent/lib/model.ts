@@ -10,11 +10,9 @@ export interface ModelSelection {
 }
 
 export function validateOpenRouterKey(key?: string): void {
-	if (key === undefined) return;
+	if (!key) return;
 	const trimmed = key.trim();
-	if (!trimmed) {
-		throw new Error("OPENROUTER_API_KEY is set but blank.");
-	}
+	if (!trimmed) return;
 	if (!trimmed.startsWith("sk-or-")) {
 		throw new Error(
 			"OPENROUTER_API_KEY is malformed: it must start with 'sk-or-'.",
@@ -23,16 +21,15 @@ export function validateOpenRouterKey(key?: string): void {
 }
 
 export function validateStartup(): void {
-	if (process.env.OPENROUTER_API_KEY !== undefined) {
-		validateOpenRouterKey(process.env.OPENROUTER_API_KEY);
-	}
+	validateOpenRouterKey(process.env.OPENROUTER_API_KEY);
 }
 
 export function getProvider(
 	env: Record<string, string | undefined> = process.env,
 ): AiProvider {
-	if (env.OPENROUTER_API_KEY !== undefined) {
-		validateOpenRouterKey(env.OPENROUTER_API_KEY);
+	const openrouterKey = env.OPENROUTER_API_KEY?.trim();
+	if (openrouterKey) {
+		validateOpenRouterKey(openrouterKey);
 		return "openrouter";
 	}
 	if (env.AI_GATEWAY_API_KEY?.trim()) {
