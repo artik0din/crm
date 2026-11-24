@@ -105,7 +105,7 @@ has, so it plans around what it actually has rather than discovering the gaps on
 failed call at a time, and it prints the list at startup:
 
 ```
-[agent] off  Web research (PERPLEXITY_API_KEY)
+[agent] off  Web research (OPENROUTER_API_KEY)
 [agent] on   Company brand data (Settings → General)
 [agent] on   LinkedIn (Settings → General)
 ```
@@ -310,7 +310,7 @@ short version:
 | | |
 | --- | --- |
 | `API_URL` / `APP_URL` | Where the two halves are served. Only needed off localhost. |
-| `PERPLEXITY_API_KEY` | Lets the agent search the open web, with citations. |
+| `OPENROUTER_API_KEY` | Lets the agent search the open web, with citations, and powers the model. |
 | `AGENT_BRIDGE_SECRET` | Lets a rep talk to the agent from a contact's **Agent** tab. |
 | `REDIS_URL` | A shared cache. Without it, per-instance and in-memory. |
 | `CRON_SECRET` | Guards the mailbox sync route. Required to use it. |

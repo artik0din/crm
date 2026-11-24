@@ -20,8 +20,7 @@
 				"OPENROUTER_API_KEY",
 				"BLOB_READ_WRITE_TOKEN",
 				"DATABASE_URL",
-				"GITHUB_TOKEN",
-				"PERPLEXITY_API_KEY"
+				"GITHUB_TOKEN"
 			]
 		},
 		"dev:headless": {
@@ -34,8 +33,7 @@
 				"OPENROUTER_API_KEY",
 				"BLOB_READ_WRITE_TOKEN",
 				"DATABASE_URL",
-				"GITHUB_TOKEN",
-				"PERPLEXITY_API_KEY"
+				"GITHUB_TOKEN"
 			]
 		},
 		/**

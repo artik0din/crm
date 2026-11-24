@@ -46,7 +46,7 @@ export function capabilitiesFrom(
 
 	return [
 		{
-			...fromEnv("PERPLEXITY_API_KEY"),
+			...fromEnv("OPENROUTER_API_KEY"),
 			label: "Web research",
 			gives:
 				"open-web context with citations, and the search that finds a LinkedIn slug in the first place",
