@@ -50,6 +50,7 @@ import {
 	Fragment,
 	type ReactNode,
 	useDeferredValue,
+	useEffect,
 	useId,
 	useMemo,
 	useState,
@@ -148,17 +149,10 @@ export function resizeColumnWidth(current: number, delta: number): number {
 	);
 }
 
-function readStoredWidths(key?: string): Record<string, number> {
-	if (!key) return {};
+export function readStoredWidths(key?: string): Record<string, number> {
+	if (!key || typeof window === "undefined") return {};
 	try {
-		const storage =
-			typeof window !== "undefined"
-				? window.localStorage
-				: typeof localStorage !== "undefined"
-					? localStorage
-					: undefined;
-		if (!storage) return {};
-		const raw = storage.getItem(key);
+		const raw = window.localStorage.getItem(key);
 		if (!raw) return {};
 		const parsed = JSON.parse(raw);
 		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
@@ -179,20 +173,13 @@ function readStoredWidths(key?: string): Record<string, number> {
 	return {};
 }
 
-function writeStoredWidths(
+export function writeStoredWidths(
 	key: string | undefined,
 	widths: Record<string, number>,
 ): void {
-	if (!key) return;
+	if (!key || typeof window === "undefined") return;
 	try {
-		const storage =
-			typeof window !== "undefined"
-				? window.localStorage
-				: typeof localStorage !== "undefined"
-					? localStorage
-					: undefined;
-		if (!storage) return;
-		storage.setItem(key, JSON.stringify(widths));
+		window.localStorage.setItem(key, JSON.stringify(widths));
 	} catch {}
 }
 
@@ -372,9 +359,15 @@ export function DataTable<TRow, TSub = unknown>({
 	);
 	const [isScrolled, setIsScrolled] = useState(false);
 	const isResizable = Boolean(storageKey);
-	const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() =>
-		readStoredWidths(storageKey),
-	);
+	const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+
+	useEffect(() => {
+		if (!storageKey) return;
+		const stored = readStoredWidths(storageKey);
+		if (Object.keys(stored).length > 0) {
+			setColumnWidths(stored);
+		}
+	}, [storageKey]);
 	const [filtersOpen, setFiltersOpen] = useState(false);
 	const filtersId = useId();
 

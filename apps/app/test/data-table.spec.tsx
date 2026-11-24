@@ -3,6 +3,7 @@ import {
 	DataTable,
 	MAX_COLUMN_WIDTH_REM,
 	MIN_COLUMN_WIDTH_REM,
+	readStoredWidths,
 	resizeColumnWidth,
 } from "@crm/ui/components/data-table";
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
@@ -130,7 +131,7 @@ describe("DataTable sticky columns", () => {
 		);
 	});
 
-	it("applies column width persisted in storage", () => {
+	it("renders first render with initial default widths without storage values", () => {
 		const originalStorage = globalThis.localStorage;
 		const store = new Map<string, string>([
 			["contacts-test", JSON.stringify({ name: 22 })],
@@ -171,9 +172,45 @@ describe("DataTable sticky columns", () => {
 				</NuqsTestingAdapter>,
 			);
 
-			expect(html).toContain("width:22rem;min-width:22rem;max-width:22rem");
+			expect(html).toContain("width:16rem;min-width:16rem;max-width:16rem");
+			expect(html).not.toContain("width:22rem");
 		} finally {
 			globalThis.localStorage = originalStorage;
+		}
+	});
+
+	it("reads stored widths correctly in client storage", () => {
+		const originalWindow = globalThis.window;
+		const store = new Map<string, string>([
+			["contacts-test", JSON.stringify({ name: 22, title: 50, invalid: "NaN" })],
+		]);
+		const mockStorage = {
+			getItem: (key: string) => store.get(key) ?? null,
+			setItem: (key: string, value: string) => {
+				store.set(key, value);
+			},
+			removeItem: (key: string) => {
+				store.delete(key);
+			},
+			clear: () => {
+				store.clear();
+			},
+			length: store.size,
+			key: () => null,
+		};
+		// @ts-expect-error mock window
+		globalThis.window = {
+			localStorage: mockStorage,
+		};
+
+		try {
+			const widths = readStoredWidths("contacts-test");
+			expect(widths.name).toBe(22);
+			expect(widths.title).toBe(MAX_COLUMN_WIDTH_REM);
+			expect(widths.invalid).toBeUndefined();
+		} finally {
+			// @ts-expect-error restore window
+			globalThis.window = originalWindow;
 		}
 	});
 
