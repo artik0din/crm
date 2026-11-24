@@ -409,6 +409,122 @@ export class FieldsService {
 		return { filled, total };
 	}
 
+	async sortableFieldFor(
+		entity: FieldEntity,
+		sort: string,
+	): Promise<FieldDefinitionWithOptions | null> {
+		if (!sort.startsWith("field:")) return null;
+		const key = sort.slice("field:".length);
+		return this.db.fieldDefinition.findFirst({
+			where: {
+				entity,
+				key,
+				archivedAt: null,
+				showOnTable: true,
+				type: { in: [...FIELDS_CONFIG.sort.types] },
+			},
+			include: WITH_OPTIONS,
+		});
+	}
+
+	async orderedRecordIds(
+		entity: FieldEntity,
+		where:
+			| Prisma.CompanyWhereInput
+			| Prisma.ContactWhereInput
+			| Prisma.DealWhereInput,
+		field: FieldDefinitionWithOptions,
+		dir: "asc" | "desc",
+		skip: number,
+		take: number,
+	): Promise<string[]> {
+		const column =
+			field.type === "NUMBER"
+				? "number"
+				: field.type === "CHECKBOX"
+					? "bool"
+					: "text";
+		const recordIdColumn = recordColumn(entity);
+		const relation = RELATIONS[entity];
+
+		const filledWhere = {
+			fieldId: field.id,
+			[column]: { not: null },
+			[relation]: where,
+		} as Prisma.FieldValueWhereInput;
+
+		const filledCount = await this.db.fieldValue.count({
+			where: filledWhere,
+		});
+
+		const ids: string[] = [];
+
+		if (skip < filledCount) {
+			const filledTake = Math.min(take, filledCount - skip);
+			const filledRows = await this.db.fieldValue.findMany({
+				where: filledWhere,
+				orderBy: [{ [column]: dir }, { id: "asc" }],
+				skip,
+				take: filledTake,
+				select: { [recordIdColumn]: true },
+			});
+
+			for (const row of filledRows) {
+				const id = (row as Record<string, unknown>)[recordIdColumn];
+				if (typeof id === "string") ids.push(id);
+			}
+		}
+
+		const remainingTake = take - ids.length;
+		if (remainingTake > 0) {
+			const secondSkip = Math.max(0, skip - filledCount);
+			const unvaluedWhere = {
+				AND: [
+					where,
+					{
+						fieldValues: {
+							none: {
+								fieldId: field.id,
+								[column]: { not: null },
+							},
+						},
+					},
+				],
+			};
+
+			const unvaluedRows =
+				entity === "COMPANY"
+					? await this.db.company.findMany({
+							where: unvaluedWhere as Prisma.CompanyWhereInput,
+							orderBy: [{ createdAt: "desc" }],
+							skip: secondSkip,
+							take: remainingTake,
+							select: { id: true },
+						})
+					: entity === "CONTACT"
+						? await this.db.contact.findMany({
+								where: unvaluedWhere as Prisma.ContactWhereInput,
+								orderBy: [{ createdAt: "desc" }],
+								skip: secondSkip,
+								take: remainingTake,
+								select: { id: true },
+							})
+						: await this.db.deal.findMany({
+								where: unvaluedWhere as Prisma.DealWhereInput,
+								orderBy: [{ createdAt: "desc" }],
+								skip: secondSkip,
+								take: remainingTake,
+								select: { id: true },
+							});
+
+			for (const row of unvaluedRows) {
+				ids.push(row.id);
+			}
+		}
+
+		return ids;
+	}
+
 	async definitionsFor(
 		entity: FieldEntity,
 		client: Prisma.TransactionClient = this.db,

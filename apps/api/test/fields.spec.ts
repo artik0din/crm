@@ -684,3 +684,210 @@ describe("queueing a backfill", () => {
 		});
 	});
 });
+
+describe("sorting lists by custom field", () => {
+	it("sorts by NUMBER asc and desc with records lacking a value last, across page boundaries", async () => {
+		const numberField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec followers",
+			type: "NUMBER",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: true,
+			showOnFilter: false,
+		});
+
+		const co1 = await makeCompany("sort-num-1");
+		const co2 = await makeCompany("sort-num-2");
+		const co3 = await makeCompany("sort-num-3");
+		const co4 = await makeCompany("sort-num-4");
+		const co5 = await makeCompany("sort-num-5");
+
+		await fields.applyValues(db, "COMPANY", co1, { [numberField.key]: 10 });
+		await fields.applyValues(db, "COMPANY", co2, { [numberField.key]: 50 });
+		await fields.applyValues(db, "COMPANY", co3, { [numberField.key]: 100 });
+
+		const listInputBase = {
+			q: "sort-num",
+			sort: `field:${numberField.key}`,
+			pageSize: 2,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		};
+
+		const ascP1 = await companies.list({
+			...listInputBase,
+			dir: "asc",
+			page: 1,
+		});
+		const ascP2 = await companies.list({
+			...listInputBase,
+			dir: "asc",
+			page: 2,
+		});
+		const ascP3 = await companies.list({
+			...listInputBase,
+			dir: "asc",
+			page: 3,
+		});
+
+		expect(ascP1.total).toBe(5);
+		expect(ascP1.rows.map((r) => r.id)).toEqual([co1, co2]);
+		expect(ascP2.rows.map((r) => r.id)).toEqual([co3, co5]);
+		expect(ascP3.rows.map((r) => r.id)).toEqual([co4]);
+
+		const descP1 = await companies.list({
+			...listInputBase,
+			dir: "desc",
+			page: 1,
+		});
+		const descP2 = await companies.list({
+			...listInputBase,
+			dir: "desc",
+			page: 2,
+		});
+		const descP3 = await companies.list({
+			...listInputBase,
+			dir: "desc",
+			page: 3,
+		});
+
+		expect(descP1.rows.map((r) => r.id)).toEqual([co3, co2]);
+		expect(descP2.rows.map((r) => r.id)).toEqual([co1, co5]);
+		expect(descP3.rows.map((r) => r.id)).toEqual([co4]);
+	});
+
+	it("sorts by TEXT and CHECKBOX", async () => {
+		const textField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec tag",
+			type: "TEXT",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: true,
+			showOnFilter: false,
+		});
+
+		const boolField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec vip",
+			type: "CHECKBOX",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: true,
+			showOnFilter: false,
+		});
+
+		const coA = await makeCompany("sort-tc-a");
+		const coB = await makeCompany("sort-tc-b");
+		const coC = await makeCompany("sort-tc-c");
+
+		await fields.applyValues(db, "COMPANY", coA, {
+			[textField.key]: "Apple",
+			[boolField.key]: false,
+		});
+		await fields.applyValues(db, "COMPANY", coB, {
+			[textField.key]: "Banana",
+			[boolField.key]: true,
+		});
+
+		const textAsc = await companies.list({
+			q: "sort-tc",
+			sort: `field:${textField.key}`,
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+		expect(textAsc.rows.map((r) => r.id)).toEqual([coA, coB, coC]);
+
+		const textDesc = await companies.list({
+			q: "sort-tc",
+			sort: `field:${textField.key}`,
+			dir: "desc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+		expect(textDesc.rows.map((r) => r.id)).toEqual([coB, coA, coC]);
+
+		const boolAsc = await companies.list({
+			q: "sort-tc",
+			sort: `field:${boolField.key}`,
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+		expect(boolAsc.rows.map((r) => r.id)).toEqual([coA, coB, coC]);
+
+		const boolDesc = await companies.list({
+			q: "sort-tc",
+			sort: `field:${boolField.key}`,
+			dir: "desc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+		expect(boolDesc.rows.map((r) => r.id)).toEqual([coB, coA, coC]);
+	});
+
+	it("falls back to default order for unknown field key or non-table field", async () => {
+		const coX = await makeCompany("sort-fb-1");
+		const coY = await makeCompany("sort-fb-2");
+
+		const unknownSort = await companies.list({
+			q: "sort-fb",
+			sort: "field:nonexistent_key",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+		expect(unknownSort.rows.map((r) => r.id)).toEqual([coY, coX]);
+	});
+});
