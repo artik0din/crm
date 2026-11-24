@@ -1,5 +1,6 @@
 import { db } from "@crm/db";
 import {
+	DEFAULT_AGENT_MODEL,
 	DEFAULT_OPENROUTER_MODEL,
 	readAgentModel,
 	resolveAgentModel,
@@ -55,8 +56,32 @@ function getOpenRouterClient(apiKey: string) {
 	return cachedOpenRouterClient;
 }
 
+export function defaultAgentFallbackModel(): string {
+	return getProvider() === "openrouter"
+		? DEFAULT_OPENROUTER_MODEL.id
+		: DEFAULT_AGENT_MODEL.id;
+}
+
 export async function selectedModel(): Promise<ModelSelection | null> {
-	if (getProvider() === "openrouter") return null;
+	if (getProvider() === "openrouter") {
+		try {
+			const setting = await resolveAgentModel(db, { provider: "openrouter" });
+			return {
+				model: setting.id,
+				modelContextWindowTokens: setting.contextWindowTokens,
+			};
+		} catch (error) {
+			console.error(
+				`[agent] could not read the configured OpenRouter model for session: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			);
+			return {
+				model: DEFAULT_OPENROUTER_MODEL.id,
+				modelContextWindowTokens: DEFAULT_OPENROUTER_MODEL.contextWindowTokens,
+			};
+		}
+	}
 
 	try {
 		const setting = await readAgentModel(db);
@@ -112,7 +137,47 @@ export async function selectedModelStep(): Promise<{
 export async function selectedRunnerModel(
 	runId: string,
 ): Promise<ModelSelection | null> {
-	if (getProvider() === "openrouter") return null;
+	if (getProvider() === "openrouter") {
+		try {
+			const run = await db.agentRun.findUnique({
+				where: { id: runId },
+				select: {
+					version: {
+						select: { modelId: true, modelContextWindowTokens: true },
+					},
+				},
+			});
+
+			if (!run) {
+				return {
+					model: DEFAULT_OPENROUTER_MODEL.id,
+					modelContextWindowTokens:
+						DEFAULT_OPENROUTER_MODEL.contextWindowTokens,
+				};
+			}
+
+			const effective = resolveModelForProvider(
+				run.version.modelId,
+				run.version.modelContextWindowTokens,
+				"openrouter",
+			);
+
+			return {
+				model: effective.id,
+				modelContextWindowTokens: effective.contextWindowTokens,
+			};
+		} catch (error) {
+			console.error(
+				`[agent] could not read the runner model for session: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			);
+			return {
+				model: DEFAULT_OPENROUTER_MODEL.id,
+				modelContextWindowTokens: DEFAULT_OPENROUTER_MODEL.contextWindowTokens,
+			};
+		}
+	}
 
 	try {
 		const run = await db.agentRun.findUnique({
@@ -145,6 +210,8 @@ export async function selectedRunnerModelStep(runId: string): Promise<{
 	validateOpenRouterKey(apiKey);
 	if (!apiKey) return null;
 
+	const openrouter = getOpenRouterClient(apiKey);
+
 	try {
 		const run = await db.agentRun.findUnique({
 			where: { id: runId },
@@ -155,7 +222,16 @@ export async function selectedRunnerModelStep(runId: string): Promise<{
 			},
 		});
 
-		if (!run) return null;
+		if (!run) {
+			console.error(
+				`[agent] run ${runId} not found, falling back to default OpenRouter model`,
+			);
+			return {
+				model: openrouter.chat(DEFAULT_OPENROUTER_MODEL.id),
+				modelContextWindowTokens:
+					DEFAULT_OPENROUTER_MODEL.contextWindowTokens,
+			};
+		}
 
 		const effective = resolveModelForProvider(
 			run.version.modelId,
@@ -163,12 +239,19 @@ export async function selectedRunnerModelStep(runId: string): Promise<{
 			"openrouter",
 		);
 
-		const openrouter = getOpenRouterClient(apiKey);
 		return {
 			model: openrouter.chat(effective.id),
 			modelContextWindowTokens: effective.contextWindowTokens,
 		};
-	} catch {
-		return null;
+	} catch (error) {
+		console.error(
+			`[agent] could not read the runner step model, falling back to default: ${
+				error instanceof Error ? error.message : String(error)
+			}`,
+		);
+		return {
+			model: openrouter.chat(DEFAULT_OPENROUTER_MODEL.id),
+			modelContextWindowTokens: DEFAULT_OPENROUTER_MODEL.contextWindowTokens,
+		};
 	}
 }

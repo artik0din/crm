@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { DEFAULT_AGENT_MODEL, DEFAULT_OPENROUTER_MODEL } from "@crm/db/settings";
 import {
+	defaultAgentFallbackModel,
 	getProvider,
+	selectedModel,
+	selectedModelStep,
+	selectedRunnerModel,
+	selectedRunnerModelStep,
 	validateOpenRouterKey,
 	validateStartup,
 } from "../agent/lib/model";
@@ -56,5 +62,49 @@ describe("provider selection", () => {
 		delete process.env.OPENROUTER_API_KEY;
 		expect(() => validateStartup()).not.toThrow();
 		expect(() => validateOpenRouterKey(undefined)).not.toThrow();
+	});
+
+	it("returns correct fallback model depending on active provider", () => {
+		delete process.env.OPENROUTER_API_KEY;
+		expect(defaultAgentFallbackModel()).toBe(DEFAULT_AGENT_MODEL.id);
+
+		process.env.OPENROUTER_API_KEY = "sk-or-v1-testkey123";
+		expect(defaultAgentFallbackModel()).toBe(DEFAULT_OPENROUTER_MODEL.id);
+	});
+
+	it("returns OpenRouter model in selectedModel when OpenRouter is active", async () => {
+		process.env.OPENROUTER_API_KEY = "sk-or-v1-testkey123";
+		const model = await selectedModel();
+		expect(model?.model).toBe(DEFAULT_OPENROUTER_MODEL.id);
+		expect(model?.modelContextWindowTokens).toBe(
+			DEFAULT_OPENROUTER_MODEL.contextWindowTokens,
+		);
+	});
+
+	it("returns OpenRouter chat step in selectedModelStep when OpenRouter is active", async () => {
+		process.env.OPENROUTER_API_KEY = "sk-or-v1-testkey123";
+		const step = await selectedModelStep();
+		expect(step).not.toBeNull();
+		expect(step?.modelContextWindowTokens).toBe(
+			DEFAULT_OPENROUTER_MODEL.contextWindowTokens,
+		);
+	});
+
+	it("returns OpenRouter default model in selectedRunnerModel for nonexistent run in OpenRouter mode", async () => {
+		process.env.OPENROUTER_API_KEY = "sk-or-v1-testkey123";
+		const runnerModel = await selectedRunnerModel("non-existent-run-id");
+		expect(runnerModel?.model).toBe(DEFAULT_OPENROUTER_MODEL.id);
+		expect(runnerModel?.modelContextWindowTokens).toBe(
+			DEFAULT_OPENROUTER_MODEL.contextWindowTokens,
+		);
+	});
+
+	it("returns OpenRouter default step in selectedRunnerModelStep for nonexistent run in OpenRouter mode", async () => {
+		process.env.OPENROUTER_API_KEY = "sk-or-v1-testkey123";
+		const runnerStep = await selectedRunnerModelStep("non-existent-run-id");
+		expect(runnerStep).not.toBeNull();
+		expect(runnerStep?.modelContextWindowTokens).toBe(
+			DEFAULT_OPENROUTER_MODEL.contextWindowTokens,
+		);
 	});
 });

@@ -1,14 +1,17 @@
-import { DEFAULT_AGENT_MODEL } from "@crm/db/settings";
 import { defineAgent, defineDynamic } from "eve";
 import { z } from "zod";
-import { selectedRunnerModel, selectedRunnerModelStep } from "../../lib/model";
+import {
+	defaultAgentFallbackModel,
+	selectedRunnerModel,
+	selectedRunnerModelStep,
+} from "../../lib/model";
 import { attribute, purposeOf } from "../../lib/session-purpose";
 
 export default defineAgent({
 	description:
 		"Execute one immutable deployed CRM agent version and persist its result and every side effect.",
 	model: defineDynamic({
-		fallback: DEFAULT_AGENT_MODEL.id,
+		fallback: defaultAgentFallbackModel(),
 		events: {
 			"session.started": async (_event, ctx) => {
 				if (purposeOf(ctx) !== "team-agent") return null;
