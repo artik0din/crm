@@ -24,10 +24,45 @@ const mockQuery = {
 };
 
 describe("DataTable sticky columns", () => {
+	it("renders fixed layout with percent classes and no sticky or handles without storageKey", () => {
+		const html = renderToStaticMarkup(
+			<NuqsTestingAdapter>
+				<DataTable
+					query={mockQuery}
+					columns={[
+						{
+							id: "name",
+							header: "Name",
+							width: "w-[40%]",
+							cell: (row: { id: string; name: string }) => row.name,
+						},
+						{
+							id: "role",
+							header: "Role",
+							width: "w-[60%]",
+							cell: (row: { id: string; role: string }) => row.role,
+						},
+					]}
+					getRowId={(row) => row.id}
+					rows={[{ id: "1", name: "Alice", role: "Admin" }]}
+					total={1}
+				/>
+			</NuqsTestingAdapter>,
+		);
+
+		expect(html).toContain("table-fixed w-full");
+		expect(html).toContain("w-[40%]");
+		expect(html).toContain("w-[60%]");
+		expect(html).not.toContain("role=\"separator\"");
+		expect(html).not.toContain("sticky z-");
+		expect(html).not.toContain("width:11rem");
+	});
+
 	it("pins the first data column to left-0 when there is no selection", () => {
 		const html = renderToStaticMarkup(
 			<NuqsTestingAdapter>
 				<DataTable
+					storageKey="test"
 					query={mockQuery}
 					columns={[
 						{
@@ -58,6 +93,7 @@ describe("DataTable sticky columns", () => {
 		const html = renderToStaticMarkup(
 			<NuqsTestingAdapter>
 				<DataTable
+					storageKey="test"
 					query={mockQuery}
 					columns={[
 						{

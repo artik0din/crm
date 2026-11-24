@@ -371,6 +371,7 @@ export function DataTable<TRow, TSub = unknown>({
 		parseAsArrayOf(parseAsString).withDefault(defaultHiddenIds),
 	);
 	const [isScrolled, setIsScrolled] = useState(false);
+	const isResizable = Boolean(storageKey);
 	const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() =>
 		readStoredWidths(storageKey),
 	);
@@ -699,11 +700,14 @@ export function DataTable<TRow, TSub = unknown>({
 
 			<Table
 				className={cn(
-					"table-fixed w-max min-w-full [&_td:first-child]:pl-4 [&_th:first-child]:pl-4 [&_td:last-child]:pr-4 [&_th:last-child]:pr-4",
+					isResizable ? "table-fixed w-max min-w-full" : "table-fixed w-full",
+					"[&_td:first-child]:pl-4 [&_th:first-child]:pl-4 [&_td:last-child]:pr-4 [&_th:last-child]:pr-4",
 					tableClassName,
 				)}
 				containerClassName="min-h-0 flex-1 overflow-auto rounded-lg border bg-card"
-				onScroll={(e) => setIsScrolled(e.currentTarget.scrollLeft > 0)}
+				onScroll={
+					isResizable ? (e) => setIsScrolled(e.currentTarget.scrollLeft > 0) : undefined
+				}
 				overlay={
 					deferredRows.length === 0 ? (
 						<div className="absolute inset-x-0 top-11 bottom-0 flex items-center justify-center px-4 py-8 text-center text-muted-foreground">
@@ -712,15 +716,26 @@ export function DataTable<TRow, TSub = unknown>({
 					) : null
 				}
 			>
-				<TableHeader className="sticky top-0 z-20 bg-muted [&_th]:bg-muted [&_tr]:border-0 [&_tr]:shadow-[inset_0_-1px_0_var(--border)]">
+				<TableHeader
+					className={cn(
+						"sticky top-0 bg-muted [&_th]:bg-muted [&_tr]:border-0 [&_tr]:shadow-[inset_0_-1px_0_var(--border)]",
+						isResizable ? "z-20" : "z-10",
+					)}
+				>
 					<TableRow>
 						{selection && (
 							<TableHead
 								className={cn(
-									"sticky left-0 z-30 bg-muted h-11 w-10 px-3",
+									isResizable
+										? "sticky left-0 z-30 bg-muted h-11 w-10 px-3"
+										: "h-11 w-10 px-3",
 									HIDE_BELOW_CLASS.sm,
 								)}
-								style={{ width: "2.5rem", minWidth: "2.5rem", maxWidth: "2.5rem" }}
+								style={
+									isResizable
+										? { width: "2.5rem", minWidth: "2.5rem", maxWidth: "2.5rem" }
+										: undefined
+								}
 							>
 								<Checkbox
 									checked={
@@ -750,26 +765,31 @@ export function DataTable<TRow, TSub = unknown>({
 							const isClassWidth =
 								column.width &&
 								(column.width.startsWith("w-") || column.width.includes(" "));
-							const stickyHeadClass = isFirst
-								? cn(
-										"sticky z-30 bg-muted",
-										selection ? "left-0 sm:left-10" : "left-0",
-										isScrolled &&
-											"shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
-									)
-								: undefined;
+							const stickyHeadClass =
+								isResizable && isFirst
+									? cn(
+											"sticky z-30 bg-muted",
+											selection ? "left-0 sm:left-10" : "left-0",
+											isScrolled &&
+												"shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
+										)
+									: undefined;
 							const isActive = query.sort === column.id;
 							return (
 								<TableHead
 									key={column.id}
-									style={{
-										width: `${widthRem}rem`,
-										minWidth: `${widthRem}rem`,
-										maxWidth: `${widthRem}rem`,
-									}}
+									style={
+										isResizable
+											? {
+													width: `${widthRem}rem`,
+													minWidth: `${widthRem}rem`,
+													maxWidth: `${widthRem}rem`,
+												}
+											: undefined
+									}
 									className={cn(
 										"relative h-11 overflow-hidden px-3 font-normal text-muted-foreground",
-										isClassWidth && column.width,
+										(!isResizable || isClassWidth) && column.width,
 										ALIGN_CLASS[column.align ?? "left"],
 										column.hideBelow && HIDE_BELOW_CLASS[column.hideBelow],
 										column.headClassName,
@@ -800,23 +820,25 @@ export function DataTable<TRow, TSub = unknown>({
 									) : (
 										column.header
 									)}
-									<div
-										role="separator"
-										aria-orientation="vertical"
-										aria-label={`Resize ${columnLabel(column)} column`}
-										aria-valuenow={Math.round(widthRem)}
-										aria-valuemin={MIN_COLUMN_WIDTH_REM}
-										aria-valuemax={MAX_COLUMN_WIDTH_REM}
-										tabIndex={0}
-										onPointerDown={(event) =>
-											startResize(column.id, widthRem, event)
-										}
-										onKeyDown={(event) =>
-											handleResizeKey(column.id, widthRem, event)
-										}
-										onClick={(event) => event.stopPropagation()}
-										className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize select-none touch-none hover:bg-border/60 focus-visible:bg-primary focus-visible:outline-none"
-									/>
+									{isResizable && (
+										<div
+											role="separator"
+											aria-orientation="vertical"
+											aria-label={`Resize ${columnLabel(column)} column`}
+											aria-valuenow={Math.round(widthRem)}
+											aria-valuemin={MIN_COLUMN_WIDTH_REM}
+											aria-valuemax={MAX_COLUMN_WIDTH_REM}
+											tabIndex={0}
+											onPointerDown={(event) =>
+												startResize(column.id, widthRem, event)
+											}
+											onKeyDown={(event) =>
+												handleResizeKey(column.id, widthRem, event)
+											}
+											onClick={(event) => event.stopPropagation()}
+											className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize select-none touch-none hover:bg-border/60 focus-visible:bg-primary focus-visible:outline-none"
+										/>
+									)}
 								</TableHead>
 							);
 						})}
@@ -861,14 +883,20 @@ export function DataTable<TRow, TSub = unknown>({
 									{selection && (
 										<TableCell
 											className={cn(
-												"sticky left-0 z-10 bg-card group-hover:bg-muted/60 group-data-[state=selected]:bg-muted w-10 px-3 py-3",
+												isResizable
+													? "sticky left-0 z-10 bg-card group-hover:bg-muted/60 group-data-[state=selected]:bg-muted w-10 px-3 py-3"
+													: "w-10 px-3 py-3",
 												HIDE_BELOW_CLASS.sm,
 											)}
-											style={{
-												width: "2.5rem",
-												minWidth: "2.5rem",
-												maxWidth: "2.5rem",
-											}}
+											style={
+												isResizable
+													? {
+															width: "2.5rem",
+															minWidth: "2.5rem",
+															maxWidth: "2.5rem",
+														}
+													: undefined
+											}
 											onClick={(event) => event.stopPropagation()}
 										>
 											<Checkbox
@@ -905,25 +933,30 @@ export function DataTable<TRow, TSub = unknown>({
 											column.width &&
 											(column.width.startsWith("w-") ||
 												column.width.includes(" "));
-										const stickyCellClass = isFirst
-											? cn(
-													"sticky z-10 bg-card group-hover:bg-muted/60 group-data-[state=selected]:bg-muted",
-													selection ? "left-0 sm:left-10" : "left-0",
-													isScrolled &&
-														"shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
-												)
-											: undefined;
+										const stickyCellClass =
+											isResizable && isFirst
+												? cn(
+														"sticky z-10 bg-card group-hover:bg-muted/60 group-data-[state=selected]:bg-muted",
+														selection ? "left-0 sm:left-10" : "left-0",
+														isScrolled &&
+															"shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
+													)
+												: undefined;
 										return (
 											<TableCell
 												key={column.id}
-												style={{
-													width: `${widthRem}rem`,
-													minWidth: `${widthRem}rem`,
-													maxWidth: `${widthRem}rem`,
-												}}
+												style={
+													isResizable
+														? {
+																width: `${widthRem}rem`,
+																minWidth: `${widthRem}rem`,
+																maxWidth: `${widthRem}rem`,
+															}
+														: undefined
+												}
 												className={cn(
 													"overflow-hidden px-3 py-3",
-													isClassWidth && column.width,
+													(!isResizable || isClassWidth) && column.width,
 													ALIGN_CLASS[column.align ?? "left"],
 													column.hideBelow && HIDE_BELOW_CLASS[column.hideBelow],
 													column.cellClassName,
@@ -957,14 +990,20 @@ export function DataTable<TRow, TSub = unknown>({
 												{selection && (
 													<TableCell
 														className={cn(
-															"sticky left-0 z-10 bg-muted/30 w-10 px-3 py-2.5",
+															isResizable
+																? "sticky left-0 z-10 bg-muted/30 w-10 px-3 py-2.5"
+																: "w-10 px-3 py-2.5",
 															HIDE_BELOW_CLASS.sm,
 														)}
-														style={{
-															width: "2.5rem",
-															minWidth: "2.5rem",
-															maxWidth: "2.5rem",
-														}}
+														style={
+															isResizable
+																? {
+																		width: "2.5rem",
+																		minWidth: "2.5rem",
+																		maxWidth: "2.5rem",
+																	}
+																: undefined
+														}
 													/>
 												)}
 												{anyExpandable && (
@@ -978,25 +1017,30 @@ export function DataTable<TRow, TSub = unknown>({
 														column.width &&
 														(column.width.startsWith("w-") ||
 															column.width.includes(" "));
-													const stickySubCellClass = isFirst
-														? cn(
-																"sticky z-10 bg-muted/30 group-hover:bg-muted/60",
-																selection ? "left-0 sm:left-10" : "left-0",
-																isScrolled &&
-																	"shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
-															)
-														: undefined;
+													const stickySubCellClass =
+														isResizable && isFirst
+															? cn(
+																	"sticky z-10 bg-muted/30 group-hover:bg-muted/60",
+																	selection ? "left-0 sm:left-10" : "left-0",
+																	isScrolled &&
+																		"shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
+																)
+															: undefined;
 													return (
 														<TableCell
 															key={column.id}
-															style={{
-																width: `${widthRem}rem`,
-																minWidth: `${widthRem}rem`,
-																maxWidth: `${widthRem}rem`,
-															}}
+															style={
+																isResizable
+																	? {
+																			width: `${widthRem}rem`,
+																			minWidth: `${widthRem}rem`,
+																			maxWidth: `${widthRem}rem`,
+																		}
+																	: undefined
+															}
 															className={cn(
 																"overflow-hidden px-3 py-2.5 align-top",
-																isClassWidth && column.width,
+																(!isResizable || isClassWidth) && column.width,
 																ALIGN_CLASS[column.align ?? "left"],
 																column.hideBelow &&
 																	HIDE_BELOW_CLASS[column.hideBelow],
