@@ -84,6 +84,22 @@ const COLUMNS: DataTableColumn<ContactRow>[] = [
 			),
 	},
 	{
+		id: "phone",
+		header: "Phone",
+		sortable: true,
+		defaultHidden: true,
+		width: "12rem",
+		hideBelow: "lg",
+		cell: (row) =>
+			row.phone ? (
+				<span className="truncate text-muted-foreground" title={row.phone}>
+					{row.phone}
+				</span>
+			) : (
+				<EmptyCellValue />
+			),
+	},
+	{
 		id: "company",
 		header: "Company",
 		sortable: true,
