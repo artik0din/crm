@@ -72,14 +72,13 @@ describe("session.create.before", () => {
 			updatedAt: new Date(),
 		};
 
-		const call = sessionHook(session as never, {} as never);
-		await expect(call).rejects.toThrow(APIError);
 		try {
 			await sessionHook(session as never, {} as never);
 			expect.unreachable();
 		} catch (error) {
 			expect(error).toBeInstanceOf(APIError);
 			expect((error as APIError).status).toBe("FORBIDDEN");
+			expect((error as APIError).body?.code).toBe("SIGN_IN_NOT_ALLOWED");
 		}
 	});
 
@@ -120,14 +119,13 @@ describe("session.create.before", () => {
 			updatedAt: new Date(),
 		};
 
-		const call = sessionHook(session as never, {} as never);
-		await expect(call).rejects.toThrow(APIError);
 		try {
 			await sessionHook(session as never, {} as never);
 			expect.unreachable();
 		} catch (error) {
 			expect(error).toBeInstanceOf(APIError);
 			expect((error as APIError).status).toBe("FORBIDDEN");
+			expect((error as APIError).body?.code).toBe("SIGN_IN_NOT_ALLOWED");
 		}
 	});
 });

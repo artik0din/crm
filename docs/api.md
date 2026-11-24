@@ -123,7 +123,8 @@ self-hoster's admin cannot redeploy.
   Microsoft, or both — and none of them granted. `mailboxGrantsNeeded` returns which,
   so `/grant-access` offers the button they can actually use.
 - `ALLOWED_SIGN_IN` still decides who gets an account, in
-  `databaseHooks.user.create.before`, for SSO sign-ups too.
+  `databaseHooks.user.create.before`, for SSO sign-ups too. The allow-list is
+  also checked in `databaseHooks.session.create.before` on every sign-in.
 - `organizationProvisioning: { disabled: true }` — `ensureWorkspaceMembership` already
   does the join.
 

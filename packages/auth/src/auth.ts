@@ -312,6 +312,7 @@ async function replaceSlackAccount(account: {
 function assertAllowedSignIn(email: string | null | undefined): void {
 	if (!hasSignInAllowList()) {
 		throw new APIError("FORBIDDEN", {
+			code: "SIGN_IN_NOT_ALLOWED",
 			message:
 				'No one can sign in yet: set ALLOWED_SIGN_IN in .env to your email domain (for example ALLOWED_SIGN_IN="acme.com") and restart.',
 		});
@@ -320,6 +321,7 @@ function assertAllowedSignIn(email: string | null | undefined): void {
 	if (!isWorkspaceEmail(email)) {
 		const domain = primaryWorkspaceDomain();
 		throw new APIError("FORBIDDEN", {
+			code: "SIGN_IN_NOT_ALLOWED",
 			message: domain
 				? `This CRM is private. Sign in with your @${domain} account.`
 				: "This CRM is private. That address is not on the allow-list.",
