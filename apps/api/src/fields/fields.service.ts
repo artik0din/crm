@@ -614,19 +614,13 @@ export class FieldsService {
 				entity,
 				archivedAt: null,
 				showOnFilter: true,
-				type: { in: ["SELECT", "USER"] },
+				type: { in: [...FIELDS_CONFIG.filter.types] },
 			},
 			include: WITH_OPTIONS,
 			orderBy: { position: "asc" },
 		});
 	}
 
-	/**
-	 * Counted by joining straight to the entity table through `FieldValue`'s
-	 * relation, filtered by the same search/archived condition as the rest of
-	 * that list's facets — never by first fetching every matching id, which
-	 * would not scale past a few thousand records.
-	 */
 	async filterFacetCounts(
 		entity: FieldEntity,
 		relationWhere:
@@ -648,31 +642,82 @@ export class FieldsService {
 		const userIds = definitions
 			.filter((definition) => definition.type === "USER")
 			.map((definition) => definition.id);
+		const checkboxIds = definitions
+			.filter((definition) => definition.type === "CHECKBOX")
+			.map((definition) => definition.id);
+		const textFields = definitions.filter((definition) =>
+			(FIELDS_CONFIG.filter.textTypes as readonly string[]).includes(
+				definition.type,
+			),
+		);
+		const textIds = textFields.map((definition) => definition.id);
+		const numberFields = definitions.filter(
+			(definition) => definition.type === "NUMBER",
+		);
 
-		const [selectGroups, userGroups] = await Promise.all([
-			selectIds.length > 0
-				? this.db.fieldValue.groupBy({
-						by: ["fieldId", "optionId"],
-						where: {
-							fieldId: { in: selectIds },
-							optionId: { not: null },
-							[relation]: relationWhere,
-						} as Prisma.FieldValueWhereInput,
-						_count: { _all: true },
-					})
-				: [],
-			userIds.length > 0
-				? this.db.fieldValue.groupBy({
-						by: ["fieldId", "userId"],
-						where: {
-							fieldId: { in: userIds },
-							userId: { not: null },
-							[relation]: relationWhere,
-						} as Prisma.FieldValueWhereInput,
-						_count: { _all: true },
-					})
-				: [],
-		]);
+		const [selectGroups, userGroups, checkboxGroups, textGroups, numberCounts] =
+			await Promise.all([
+				selectIds.length > 0
+					? this.db.fieldValue.groupBy({
+							by: ["fieldId", "optionId"],
+							where: {
+								fieldId: { in: selectIds },
+								optionId: { not: null },
+								[relation]: relationWhere,
+							} as Prisma.FieldValueWhereInput,
+							_count: { _all: true },
+						})
+					: [],
+				userIds.length > 0
+					? this.db.fieldValue.groupBy({
+							by: ["fieldId", "userId"],
+							where: {
+								fieldId: { in: userIds },
+								userId: { not: null },
+								[relation]: relationWhere,
+							} as Prisma.FieldValueWhereInput,
+							_count: { _all: true },
+						})
+					: [],
+				checkboxIds.length > 0
+					? this.db.fieldValue.groupBy({
+							by: ["fieldId", "bool"],
+							where: {
+								fieldId: { in: checkboxIds },
+								bool: { not: null },
+								[relation]: relationWhere,
+							} as Prisma.FieldValueWhereInput,
+							_count: { _all: true },
+						})
+					: [],
+				textIds.length > 0
+					? this.db.fieldValue.groupBy({
+							by: ["fieldId", "text"],
+							where: {
+								fieldId: { in: textIds },
+								text: { not: null },
+								[relation]: relationWhere,
+							} as Prisma.FieldValueWhereInput,
+							_count: { _all: true },
+						})
+					: [],
+				numberFields.length > 0
+					? Promise.all(
+							numberFields.flatMap((field) =>
+								FIELDS_CONFIG.filter.numberBuckets.map(async (bucket) => {
+									const count = await this.db.fieldValue.count({
+										where: {
+											fieldId: field.id,
+											number: numberWhereForBucket(bucket),
+											[relation]: relationWhere,
+										} as Prisma.FieldValueWhereInput,
+									});
+									return { key: field.key, id: bucket.id, count };
+								}),
+							),
+						)
+					: [],
+			]);
 
 		for (const group of selectGroups) {
 			const definition = byId.get(group.fieldId);
@@ -691,10 +736,48 @@ export class FieldsService {
 			bucket[group.userId] = (bucket[group.userId] ?? 0) + group._count._all;
 		}
 
+		for (const group of checkboxGroups) {
+			const definition = byId.get(group.fieldId);
+			if (!definition || group.bool === null) continue;
+			const bucket = facetCounts[definition.key] ?? {};
+			facetCounts[definition.key] = bucket;
+			const key = group.bool ? "true" : "false";
+			bucket[key] = (bucket[key] ?? 0) + group._count._all;
+		}
+
+		const textGroupsByField = new Map<
+			string,
+			Array<{ text: string; count: number }>
+		>();
+		for (const group of textGroups) {
+			const definition = byId.get(group.fieldId);
+			if (!definition || !group.text || group.text.trim() === "") continue;
+			const list = textGroupsByField.get(definition.key) ?? [];
+			list.push({ text: group.text, count: group._count._all });
+			textGroupsByField.set(definition.key, list);
+		}
+
+		for (const [key, items] of textGroupsByField) {
+			items.sort((a, b) => b.count - a.count);
+			const capped = items.slice(0, FIELDS_CONFIG.filter.textMaxOptions);
+			const bucket: Record<string, number> = {};
+			for (const item of capped) {
+				bucket[item.text] = item.count;
+			}
+			facetCounts[key] = bucket;
+		}
+
+		for (const item of numberCounts) {
+			if (item.count > 0) {
+				const bucket = facetCounts[item.key] ?? {};
+				facetCounts[item.key] = bucket;
+				bucket[item.id] = item.count;
+			}
+		}
+
 		return facetCounts;
 	}
 
-	/** Translates selected filter values (by field key) into `FieldValue` `AND` conditions. */
 	fieldFilters(
 		definitions: FieldDefinitionWithOptions[],
 		selected: Record<string, string[]>,
@@ -705,21 +788,104 @@ export class FieldsService {
 
 		return Object.entries(selected)
 			.filter(([, values]) => values.length > 0)
-			.flatMap(([key, values]) => {
-				const definition = byKey.get(key);
-				if (!definition) return [];
+			.flatMap(
+				([key, values]): Array<{
+					fieldValues: { some: Prisma.FieldValueWhereInput };
+				}> => {
+					const definition = byKey.get(key);
+					if (!definition) return [];
 
-				return [
-					{
-						fieldValues: {
-							some:
-								definition.type === "USER"
-									? { fieldId: definition.id, userId: { in: values } }
-									: { fieldId: definition.id, optionId: { in: values } },
-						},
-					},
-				];
-			});
+					if (definition.type === "USER") {
+						const clean = values.filter(
+							(v) => typeof v === "string" && v.length > 0,
+						);
+						if (clean.length === 0) return [];
+						return [
+							{
+								fieldValues: {
+									some: { fieldId: definition.id, userId: { in: clean } },
+								},
+							},
+						];
+					}
+
+					if (definition.type === "SELECT") {
+						const validOptionIds = new Set(definition.options.map((o) => o.id));
+						const clean = values.filter((v) => validOptionIds.has(v));
+						if (clean.length === 0) return [];
+						return [
+							{
+								fieldValues: {
+									some: { fieldId: definition.id, optionId: { in: clean } },
+								},
+							},
+						];
+					}
+
+					if (definition.type === "CHECKBOX") {
+						const hasTrue = values.includes("true");
+						const hasFalse = values.includes("false");
+						if (!hasTrue && !hasFalse) return [];
+						const boolCondition = hasTrue && hasFalse ? { not: null } : hasTrue;
+						return [
+							{
+								fieldValues: {
+									some: { fieldId: definition.id, bool: boolCondition },
+								},
+							},
+						];
+					}
+
+					if (definition.type === "NUMBER") {
+						const bucketMap = new Map<
+							string,
+							(typeof FIELDS_CONFIG.filter.numberBuckets)[number]
+						>(FIELDS_CONFIG.filter.numberBuckets.map((b) => [b.id, b]));
+						const validBuckets = values
+							.map((v) => bucketMap.get(v))
+							.filter(
+								(b): b is (typeof FIELDS_CONFIG.filter.numberBuckets)[number] =>
+									b !== undefined,
+							);
+						if (validBuckets.length === 0) return [];
+
+						const orConditions = validBuckets.map((bucket) => ({
+							number: numberWhereForBucket(bucket),
+						}));
+
+						return [
+							{
+								fieldValues: {
+									some: {
+										fieldId: definition.id,
+										OR: orConditions,
+									},
+								},
+							},
+						];
+					}
+
+					if (
+						(FIELDS_CONFIG.filter.textTypes as readonly string[]).includes(
+							definition.type,
+						)
+					) {
+						const clean = values.filter(
+							(v) => typeof v === "string" && v.length > 0,
+						);
+						if (clean.length === 0) return [];
+						return [
+							{
+								fieldValues: {
+									some: { fieldId: definition.id, text: { in: clean } },
+								},
+							},
+						];
+					}
+
+					return [];
+				},
+			);
 	}
 
 	async applyValues(
@@ -764,4 +930,16 @@ function tableValue(
 	return (
 		definition.options.find((option) => option.id === value)?.label ?? null
 	);
+}
+
+function numberWhereForBucket(
+	bucket: (typeof FIELDS_CONFIG.filter.numberBuckets)[number],
+): Prisma.DecimalNullableFilter {
+	if ("gte" in bucket && "lt" in bucket) {
+		return { gte: bucket.gte, lt: bucket.lt };
+	}
+	if ("lt" in bucket) {
+		return { lt: bucket.lt };
+	}
+	return { gte: bucket.gte };
 }

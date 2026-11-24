@@ -891,3 +891,217 @@ describe("sorting lists by custom field", () => {
 		expect(unknownSort.rows.map((r) => r.id)).toEqual([coY, coX]);
 	});
 });
+
+describe("filtering lists by custom field", () => {
+	it("counts NUMBER buckets and filters with two buckets, ignoring unknown bucket ids", async () => {
+		const numField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec arr",
+			type: "NUMBER",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: false,
+			showOnFilter: true,
+		});
+
+		const co1 = await makeCompany("filt-num-1");
+		const co2 = await makeCompany("filt-num-2");
+		const co3 = await makeCompany("filt-num-3");
+		const co4 = await makeCompany("filt-num-4");
+		const co5 = await makeCompany("filt-num-5");
+
+		await fields.applyValues(db, "COMPANY", co1, { [numField.key]: 500 });
+		await fields.applyValues(db, "COMPANY", co2, { [numField.key]: 5000 });
+		await fields.applyValues(db, "COMPANY", co3, { [numField.key]: 25000 });
+		await fields.applyValues(db, "COMPANY", co4, { [numField.key]: 75000 });
+		await fields.applyValues(db, "COMPANY", co5, { [numField.key]: 150000 });
+
+		const initial = await companies.list({
+			q: "filt-num",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+
+		const counts = initial.facetCounts[`field:${numField.key}`];
+		expect(counts?.["lt:1000"]).toBe(1);
+		expect(counts?.["1000:10000"]).toBe(1);
+		expect(counts?.["10000:50000"]).toBe(1);
+		expect(counts?.["50000:100000"]).toBe(1);
+		expect(counts?.["gte:100000"]).toBe(1);
+
+		const filtered = await companies.list({
+			q: "filt-num",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {
+				[numField.key]: ["lt:1000", "10000:50000", "unknown:bucket"],
+			},
+			archived: false,
+		});
+
+		expect(filtered.total).toBe(2);
+		expect(filtered.rows.map((r) => r.id).sort()).toEqual([co1, co3].sort());
+	});
+
+	it("filters by CHECKBOX field", async () => {
+		const boolField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec active partner",
+			type: "CHECKBOX",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: false,
+			showOnFilter: true,
+		});
+
+		const coYes = await makeCompany("filt-chk-yes");
+		const coNo = await makeCompany("filt-chk-no");
+
+		await fields.applyValues(db, "COMPANY", coYes, { [boolField.key]: true });
+		await fields.applyValues(db, "COMPANY", coNo, { [boolField.key]: false });
+
+		const initial = await companies.list({
+			q: "filt-chk",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+
+		const counts = initial.facetCounts[`field:${boolField.key}`];
+		expect(counts?.true).toBe(1);
+		expect(counts?.false).toBe(1);
+
+		const onlyYes = await companies.list({
+			q: "filt-chk",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: { [boolField.key]: ["true"] },
+			archived: false,
+		});
+		expect(onlyYes.rows.map((r) => r.id)).toEqual([coYes]);
+
+		const onlyNo = await companies.list({
+			q: "filt-chk",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: { [boolField.key]: ["false"] },
+			archived: false,
+		});
+		expect(onlyNo.rows.map((r) => r.id)).toEqual([coNo]);
+	});
+
+	it("counts TEXT facets most frequent first and filters by text in", async () => {
+		const textField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec hq city",
+			type: "TEXT",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: false,
+			showOnFilter: true,
+		});
+
+		const coP1 = await makeCompany("filt-txt-p1");
+		const coP2 = await makeCompany("filt-txt-p2");
+		const coP3 = await makeCompany("filt-txt-p3");
+		const coL1 = await makeCompany("filt-txt-l1");
+		const coL2 = await makeCompany("filt-txt-l2");
+		const coT1 = await makeCompany("filt-txt-t1");
+
+		await fields.applyValues(db, "COMPANY", coP1, { [textField.key]: "Paris" });
+		await fields.applyValues(db, "COMPANY", coP2, { [textField.key]: "Paris" });
+		await fields.applyValues(db, "COMPANY", coP3, { [textField.key]: "Paris" });
+		await fields.applyValues(db, "COMPANY", coL1, {
+			[textField.key]: "London",
+		});
+		await fields.applyValues(db, "COMPANY", coL2, {
+			[textField.key]: "London",
+		});
+		await fields.applyValues(db, "COMPANY", coT1, { [textField.key]: "Tokyo" });
+
+		const initial = await companies.list({
+			q: "filt-txt",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+
+		const counts = initial.facetCounts[`field:${textField.key}`];
+		expect(counts).toEqual({ Paris: 3, London: 2, Tokyo: 1 });
+
+		const filtered = await companies.list({
+			q: "filt-txt",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: { [textField.key]: ["London", "Tokyo"] },
+			archived: false,
+		});
+
+		expect(filtered.total).toBe(3);
+		expect(filtered.rows.map((r) => r.id).sort()).toEqual(
+			[coL1, coL2, coT1].sort(),
+		);
+	});
+});
