@@ -798,11 +798,13 @@ export class FieldsService {
 						const clean = values.filter(
 							(v) => typeof v === "string" && v.length > 0,
 						);
-						if (clean.length === 0) return [];
 						return [
 							{
 								fieldValues: {
-									some: { fieldId: definition.id, userId: { in: clean } },
+									some: {
+										fieldId: definition.id,
+										userId: { in: clean },
+									},
 								},
 							},
 						];
@@ -811,11 +813,13 @@ export class FieldsService {
 					if (definition.type === "SELECT") {
 						const validOptionIds = new Set(definition.options.map((o) => o.id));
 						const clean = values.filter((v) => validOptionIds.has(v));
-						if (clean.length === 0) return [];
 						return [
 							{
 								fieldValues: {
-									some: { fieldId: definition.id, optionId: { in: clean } },
+									some: {
+										fieldId: definition.id,
+										optionId: { in: clean },
+									},
 								},
 							},
 						];
@@ -824,7 +828,15 @@ export class FieldsService {
 					if (definition.type === "CHECKBOX") {
 						const hasTrue = values.includes("true");
 						const hasFalse = values.includes("false");
-						if (!hasTrue && !hasFalse) return [];
+						if (!hasTrue && !hasFalse) {
+							return [
+								{
+									fieldValues: {
+										some: { fieldId: definition.id, id: { in: [] } },
+									},
+								},
+							];
+						}
 						const boolCondition = hasTrue && hasFalse ? { not: null } : hasTrue;
 						return [
 							{
@@ -846,7 +858,15 @@ export class FieldsService {
 								(b): b is (typeof FIELDS_CONFIG.filter.numberBuckets)[number] =>
 									b !== undefined,
 							);
-						if (validBuckets.length === 0) return [];
+						if (validBuckets.length === 0) {
+							return [
+								{
+									fieldValues: {
+										some: { fieldId: definition.id, id: { in: [] } },
+									},
+								},
+							];
+						}
 
 						const orConditions = validBuckets.map((bucket) => ({
 							number: numberWhereForBucket(bucket),
@@ -872,11 +892,13 @@ export class FieldsService {
 						const clean = values.filter(
 							(v) => typeof v === "string" && v.length > 0,
 						);
-						if (clean.length === 0) return [];
 						return [
 							{
 								fieldValues: {
-									some: { fieldId: definition.id, text: { in: clean } },
+									some: {
+										fieldId: definition.id,
+										text: { in: clean },
+									},
 								},
 							},
 						];

@@ -1155,4 +1155,104 @@ describe("filtering lists by custom field", () => {
 		expect(Object.keys(counts ?? {}).length).toBe(50);
 		expect(counts?.["TopChoice"]).toBe(2);
 	});
+
+	it("matches nothing when field filter contains only unknown option, bucket, or boolean ids", async () => {
+		const numField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec unk num",
+			type: "NUMBER",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: false,
+			showOnFilter: true,
+		});
+
+		const selectField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec unk sel",
+			type: "SELECT",
+			options: [{ label: "Choice A" }],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: false,
+			showOnFilter: true,
+		});
+
+		const boolField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec unk chk",
+			type: "CHECKBOX",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: false,
+			showOnFilter: true,
+		});
+
+		const co = await makeCompany("filt-unk-match");
+		const optionId = selectField.options[0]?.id as string;
+		await fields.applyValues(db, "COMPANY", co, {
+			[numField.key]: 500,
+			[selectField.key]: optionId,
+			[boolField.key]: true,
+		});
+
+		const unknownBucket = await companies.list({
+			q: "filt-unk-match",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: { [numField.key]: ["unknown:bucket"] },
+			archived: false,
+		});
+		expect(unknownBucket.total).toBe(0);
+		expect(unknownBucket.rows).toEqual([]);
+
+		const unknownOption = await companies.list({
+			q: "filt-unk-match",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: { [selectField.key]: ["nonexistent-option-id"] },
+			archived: false,
+		});
+		expect(unknownOption.total).toBe(0);
+		expect(unknownOption.rows).toEqual([]);
+
+		const unknownBool = await companies.list({
+			q: "filt-unk-match",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: { [boolField.key]: ["maybe"] },
+			archived: false,
+		});
+		expect(unknownBool.total).toBe(0);
+		expect(unknownBool.rows).toEqual([]);
+	});
 });
