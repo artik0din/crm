@@ -30,6 +30,7 @@ const agent = {
 		queued.push(id);
 	},
 	companyCreated: async () => undefined,
+	contactRequested: async () => undefined,
 	companyRequested: async () => undefined,
 	withCrmEvents: withDiscardedCrmEvents,
 } as unknown as AgentTriggerService;

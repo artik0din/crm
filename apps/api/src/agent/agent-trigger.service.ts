@@ -54,6 +54,8 @@ export class AgentTriggerService {
 		companyId: string,
 		reason = "New company",
 	): Promise<void> {
+		if (!AGENT_DISPATCH.automaticEnrichment) return;
+
 		await this.enqueue({
 			companyId,
 			kind: "brand",
@@ -90,6 +92,8 @@ export class AgentTriggerService {
 	}
 
 	async workspaceChanged(website: string, reason: string): Promise<void> {
+		if (!AGENT_DISPATCH.automaticEnrichment) return;
+
 		await this.enqueue({
 			kind: "workspace-profile",
 			reason: `${reason} (${website})`,
@@ -99,12 +103,24 @@ export class AgentTriggerService {
 	}
 
 	async contactCreated(contactId: string, reason: string): Promise<void> {
+		if (!AGENT_DISPATCH.automaticEnrichment) return;
+
 		await this.enqueue({
 			contactId,
 			kind: "identify",
 			reason,
 			priority: PRIORITY.identify,
 			budget: 4,
+		});
+	}
+
+	async contactRequested(contactId: string, reason: string): Promise<void> {
+		await this.enqueue({
+			contactId,
+			kind: "identify",
+			reason,
+			priority: PRIORITY.requested,
+			budget: 8,
 		});
 	}
 
@@ -303,6 +319,8 @@ export class AgentTriggerService {
 	}
 
 	async meetingSoon(contactId: string, when: Date): Promise<void> {
+		if (!AGENT_DISPATCH.automaticEnrichment) return;
+
 		await this.enqueue({
 			contactId,
 			kind: "meeting-prep",

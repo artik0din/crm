@@ -20,6 +20,7 @@ const ours = { OR: [{ email: { endsWith: `@${domain}` } }] };
 
 const agent = {
 	contactCreated: async () => undefined,
+	contactRequested: async () => undefined,
 	companyCreated: async () => undefined,
 	companyRequested: async () => undefined,
 	withCrmEvents: withDiscardedCrmEvents,

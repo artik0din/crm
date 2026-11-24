@@ -5,6 +5,7 @@ import { readWorkspaceIdentity } from "@crm/db/workspace";
 import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import type { Cache } from "cache-manager";
+import { AGENT_DISPATCH } from "../agent/agent-dispatch.config";
 import { AgentTriggerService } from "../agent/agent-trigger.service";
 import { FaviconService } from "../companies/favicon.service";
 import { InjectDatabase } from "../database/database.constants";
@@ -63,6 +64,7 @@ export class BackfillService implements OnModuleInit {
 	}
 
 	async auto(): Promise<{ started: boolean }> {
+		if (!AGENT_DISPATCH.automaticEnrichment) return { started: false };
 		if (await this.cache.get(AUTO_KEY)) return { started: false };
 		await this.cache.set(AUTO_KEY, true, AUTO_EVERY_MS);
 
