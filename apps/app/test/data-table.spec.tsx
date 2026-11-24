@@ -131,6 +131,72 @@ describe("DataTable sticky columns", () => {
 		);
 	});
 
+	it("pins the selection column and data column on clickable rows with row accent", () => {
+		const html = renderToStaticMarkup(
+			<NuqsTestingAdapter>
+				<DataTable
+					storageKey="test"
+					query={mockQuery}
+					onRowClick={() => {}}
+					columns={[
+						{
+							id: "name",
+							header: "Name",
+							width: "16rem",
+							cell: (row: { id: string; name: string }) => row.name,
+						},
+					]}
+					getRowId={(row) => row.id}
+					rows={[{ id: "1", name: "Alice" }]}
+					total={1}
+					selection={{
+						state: {
+							allSelected: false,
+							someSelected: false,
+							count: 0,
+							has: () => false,
+							toggle: () => {},
+							toggleAll: () => {},
+							clear: () => {},
+							ids: [],
+						},
+						actions: null,
+					}}
+				/>
+			</NuqsTestingAdapter>,
+		);
+
+		expect(html).toContain("[&amp;&gt;td.sticky]:sticky");
+		expect(html).toContain("[&amp;&gt;td:first-child.sticky]:sticky");
+		expect(html).toContain("sticky left-0 z-10");
+	});
+
+	it("pins the first data column on clickable rows without selection", () => {
+		const html = renderToStaticMarkup(
+			<NuqsTestingAdapter>
+				<DataTable
+					storageKey="test"
+					query={mockQuery}
+					onRowClick={() => {}}
+					columns={[
+						{
+							id: "name",
+							header: "Name",
+							width: "16rem",
+							cell: (row: { id: string; name: string }) => row.name,
+						},
+					]}
+					getRowId={(row) => row.id}
+					rows={[{ id: "1", name: "Alice" }]}
+					total={1}
+				/>
+			</NuqsTestingAdapter>,
+		);
+
+		expect(html).toContain("[&amp;&gt;td.sticky]:sticky");
+		expect(html).toContain("sticky z-10");
+	});
+
 	it("renders first render with initial default widths without storage values", () => {
 		const originalStorage = globalThis.localStorage;
 		const store = new Map<string, string>([

@@ -871,6 +871,8 @@ export function DataTable<TRow, TSub = unknown>({
 												? ROW_ACCENT_EXPANDABLE
 												: ROW_ACCENT
 											: undefined,
+										isResizable &&
+											"[&>td.sticky]:sticky [&>td:first-child.sticky]:sticky",
 									)}
 								>
 									{selection && (
@@ -978,6 +980,8 @@ export function DataTable<TRow, TSub = unknown>({
 														(anyExpandable
 															? ROW_ACCENT_EXPANDABLE
 															: ROW_ACCENT),
+													isResizable &&
+														"[&>td.sticky]:sticky [&>td:first-child.sticky]:sticky",
 												)}
 											>
 												{selection && (
