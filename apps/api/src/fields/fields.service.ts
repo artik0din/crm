@@ -496,7 +496,7 @@ export class FieldsService {
 				entity === "COMPANY"
 					? await this.db.company.findMany({
 							where: unvaluedWhere as Prisma.CompanyWhereInput,
-							orderBy: [{ createdAt: "desc" }],
+							orderBy: [{ createdAt: "desc" }, { id: "desc" }],
 							skip: secondSkip,
 							take: remainingTake,
 							select: { id: true },
@@ -504,14 +504,14 @@ export class FieldsService {
 					: entity === "CONTACT"
 						? await this.db.contact.findMany({
 								where: unvaluedWhere as Prisma.ContactWhereInput,
-								orderBy: [{ createdAt: "desc" }],
+								orderBy: [{ createdAt: "desc" }, { id: "desc" }],
 								skip: secondSkip,
 								take: remainingTake,
 								select: { id: true },
 							})
 						: await this.db.deal.findMany({
 								where: unvaluedWhere as Prisma.DealWhereInput,
-								orderBy: [{ createdAt: "desc" }],
+								orderBy: [{ createdAt: "desc" }, { id: "desc" }],
 								skip: secondSkip,
 								take: remainingTake,
 								select: { id: true },

@@ -890,6 +890,70 @@ describe("sorting lists by custom field", () => {
 		});
 		expect(unknownSort.rows.map((r) => r.id)).toEqual([coY, coX]);
 	});
+
+	it("orders unvalued records stably with id desc tiebreaker across page boundaries when createdAt matches", async () => {
+		const numberField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec stable tie",
+			type: "NUMBER",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: true,
+			showOnFilter: false,
+		});
+
+		const co1 = await makeCompany("sort-stable-1");
+		const co2 = await makeCompany("sort-stable-2");
+		const fixedDate = new Date("2026-06-01T12:00:00.000Z");
+
+		await db.company.update({
+			where: { id: co1 },
+			data: { createdAt: fixedDate },
+		});
+		await db.company.update({
+			where: { id: co2 },
+			data: { createdAt: fixedDate },
+		});
+
+		const [expectedFirst, expectedSecond] = co1 > co2 ? [co1, co2] : [co2, co1];
+
+		const p1 = await companies.list({
+			q: "sort-stable",
+			sort: `field:${numberField.key}`,
+			dir: "asc",
+			page: 1,
+			pageSize: 1,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+
+		const p2 = await companies.list({
+			q: "sort-stable",
+			sort: `field:${numberField.key}`,
+			dir: "asc",
+			page: 2,
+			pageSize: 1,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+
+		expect(p1.total).toBe(2);
+		expect(p1.rows.map((r) => r.id)).toEqual([expectedFirst]);
+		expect(p2.rows.map((r) => r.id)).toEqual([expectedSecond]);
+	});
 });
 
 describe("filtering lists by custom field", () => {
