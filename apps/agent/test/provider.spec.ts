@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { DEFAULT_AGENT_MODEL, DEFAULT_OPENROUTER_MODEL } from "@crm/db/settings";
+import {
+	DEFAULT_AGENT_MODEL,
+	DEFAULT_OPENROUTER_MODEL,
+} from "@crm/db/settings";
 import {
 	defaultAgentFallbackModel,
 	getProvider,

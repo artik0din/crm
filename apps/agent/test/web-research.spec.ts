@@ -81,9 +81,7 @@ describe("web-research ask", () => {
 		expect(result.ok).toBe(true);
 		if (result.ok) {
 			expect(result.data.text).toBe("Acme makes anvils.");
-			expect(result.data.citations).toEqual([
-				"https://example.com/annotated",
-			]);
+			expect(result.data.citations).toEqual(["https://example.com/annotated"]);
 		}
 	});
 

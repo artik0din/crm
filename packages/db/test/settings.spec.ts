@@ -103,7 +103,9 @@ describe("model provider resolution", () => {
 	it("resolves the gateway default when no model is saved", () => {
 		const resolved = resolveModelForProvider(null, null, "gateway");
 		expect(resolved.id).toBe(DEFAULT_AGENT_MODEL.id);
-		expect(resolved.contextWindowTokens).toBe(DEFAULT_AGENT_MODEL.contextWindowTokens);
+		expect(resolved.contextWindowTokens).toBe(
+			DEFAULT_AGENT_MODEL.contextWindowTokens,
+		);
 		expect(resolved.isDefault).toBe(true);
 		expect(resolved.unavailableOnCurrentProvider).toBe(false);
 	});
@@ -111,40 +113,59 @@ describe("model provider resolution", () => {
 	it("resolves the openrouter default when no model is saved", () => {
 		const resolved = resolveModelForProvider(null, null, "openrouter");
 		expect(resolved.id).toBe(DEFAULT_OPENROUTER_MODEL.id);
-		expect(resolved.contextWindowTokens).toBe(DEFAULT_OPENROUTER_MODEL.contextWindowTokens);
+		expect(resolved.contextWindowTokens).toBe(
+			DEFAULT_OPENROUTER_MODEL.contextWindowTokens,
+		);
 		expect(resolved.isDefault).toBe(true);
 		expect(resolved.unavailableOnCurrentProvider).toBe(false);
 	});
 
 	it("resolves a saved gateway model to openrouter default and flags unavailable on openrouter", () => {
-		const resolved = resolveModelForProvider("zai/glm-5.2-fast", 1_000_000, "openrouter");
+		const resolved = resolveModelForProvider(
+			"zai/glm-5.2-fast",
+			1_000_000,
+			"openrouter",
+		);
 		expect(resolved.id).toBe(DEFAULT_OPENROUTER_MODEL.id);
-		expect(resolved.contextWindowTokens).toBe(DEFAULT_OPENROUTER_MODEL.contextWindowTokens);
+		expect(resolved.contextWindowTokens).toBe(
+			DEFAULT_OPENROUTER_MODEL.contextWindowTokens,
+		);
 		expect(resolved.isDefault).toBe(false);
 		expect(resolved.unavailableOnCurrentProvider).toBe(true);
 	});
 
 	it("resolves a saved openrouter model to gateway default and flags unavailable on gateway", () => {
-		const resolved = resolveModelForProvider("z-ai/glm-5.3-flash", 128_000, "gateway");
+		const resolved = resolveModelForProvider(
+			"z-ai/glm-5.3-flash",
+			128_000,
+			"gateway",
+		);
 		expect(resolved.id).toBe(DEFAULT_AGENT_MODEL.id);
-		expect(resolved.contextWindowTokens).toBe(DEFAULT_AGENT_MODEL.contextWindowTokens);
+		expect(resolved.contextWindowTokens).toBe(
+			DEFAULT_AGENT_MODEL.contextWindowTokens,
+		);
 		expect(resolved.isDefault).toBe(false);
 		expect(resolved.unavailableOnCurrentProvider).toBe(true);
 	});
 
 	it("flags unavailable when saved model is missing from validModelIds", () => {
-		const resolved = resolveModelForProvider("retired/model", 50_000, "openrouter", [
-			"z-ai/glm-5.3-flash",
-		]);
+		const resolved = resolveModelForProvider(
+			"retired/model",
+			50_000,
+			"openrouter",
+			["z-ai/glm-5.3-flash"],
+		);
 		expect(resolved.id).toBe(DEFAULT_OPENROUTER_MODEL.id);
 		expect(resolved.unavailableOnCurrentProvider).toBe(true);
 	});
 
 	it("keeps saved model when present in validModelIds", () => {
-		const resolved = resolveModelForProvider("anthropic/claude-3.5-sonnet", 200_000, "openrouter", [
+		const resolved = resolveModelForProvider(
 			"anthropic/claude-3.5-sonnet",
-			"z-ai/glm-5.3-flash",
-		]);
+			200_000,
+			"openrouter",
+			["anthropic/claude-3.5-sonnet", "z-ai/glm-5.3-flash"],
+		);
 		expect(resolved.id).toBe("anthropic/claude-3.5-sonnet");
 		expect(resolved.contextWindowTokens).toBe(200_000);
 		expect(resolved.unavailableOnCurrentProvider).toBe(false);
@@ -160,7 +181,9 @@ describe("model provider resolution", () => {
 		expect(gatewayRes.id).toBe("zai/glm-5.2-fast");
 		expect(gatewayRes.unavailableOnCurrentProvider).toBe(false);
 
-		const openrouterRes = await resolveAgentModel(db, { provider: "openrouter" });
+		const openrouterRes = await resolveAgentModel(db, {
+			provider: "openrouter",
+		});
 		expect(openrouterRes.id).toBe(DEFAULT_OPENROUTER_MODEL.id);
 		expect(openrouterRes.unavailableOnCurrentProvider).toBe(true);
 	});

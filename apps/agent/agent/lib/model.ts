@@ -228,8 +228,7 @@ export async function selectedRunnerModelStep(runId: string): Promise<{
 			);
 			return {
 				model: openrouter.chat(DEFAULT_OPENROUTER_MODEL.id),
-				modelContextWindowTokens:
-					DEFAULT_OPENROUTER_MODEL.contextWindowTokens,
+				modelContextWindowTokens: DEFAULT_OPENROUTER_MODEL.contextWindowTokens,
 			};
 		}
 

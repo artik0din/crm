@@ -26,9 +26,10 @@ export function getActiveAiProvider(
 	return key ? "openrouter" : "gateway";
 }
 
-export function getDefaultModelForProvider(
-	provider: AiProvider,
-): { id: string; contextWindowTokens: number } {
+export function getDefaultModelForProvider(provider: AiProvider): {
+	id: string;
+	contextWindowTokens: number;
+} {
 	return provider === "openrouter"
 		? DEFAULT_OPENROUTER_MODEL
 		: DEFAULT_AGENT_MODEL;

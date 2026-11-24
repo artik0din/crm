@@ -5,9 +5,9 @@ import type { Cache } from "cache-manager";
 import { AGENT_DISPATCH } from "../src/agent/agent-dispatch.config";
 import { AgentTriggerService } from "../src/agent/agent-trigger.service";
 import { BackfillService } from "../src/backfill/backfill.service";
-import { FaviconService } from "../src/backfill/favicon.service";
 import { ImageMirrorService } from "../src/backfill/image-mirror.service";
 import { CompaniesService } from "../src/companies/companies.service";
+import { FaviconService } from "../src/companies/favicon.service";
 import { ContactsService } from "../src/contacts/contacts.service";
 
 const suffix = process.env.TEST_RUN_ID ?? "manual-enrichment-spec";
@@ -175,7 +175,10 @@ describe("manual-only enrichment", () => {
 		await trigger.workspaceChanged("example.test", "Background recheck");
 
 		const tasks = await db.agentTask.findMany({
-			where: { kind: "workspace-profile", reason: { contains: "example.test" } },
+			where: {
+				kind: "workspace-profile",
+				reason: { contains: "example.test" },
+			},
 		});
 
 		expect(tasks).toHaveLength(0);
@@ -183,17 +186,26 @@ describe("manual-only enrichment", () => {
 
 	it("enqueues workspace-profile as a requested task on workspaceRequested", async () => {
 		try {
-			await trigger.workspaceRequested("onboarding.test", "Onboarding website entered");
+			await trigger.workspaceRequested(
+				"onboarding.test",
+				"Onboarding website entered",
+			);
 
 			const tasks = await db.agentTask.findMany({
-				where: { kind: "workspace-profile", reason: { contains: "onboarding.test" } },
+				where: {
+					kind: "workspace-profile",
+					reason: { contains: "onboarding.test" },
+				},
 			});
 
 			expect(tasks).toHaveLength(1);
 			expect(tasks[0]?.priority).toBe(PRIORITY.requested);
 		} finally {
 			await db.agentTask.deleteMany({
-				where: { kind: "workspace-profile", reason: { contains: "onboarding.test" } },
+				where: {
+					kind: "workspace-profile",
+					reason: { contains: "onboarding.test" },
+				},
 			});
 		}
 	});

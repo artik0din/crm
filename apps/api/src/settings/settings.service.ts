@@ -1,11 +1,8 @@
 import type { Db } from "@crm/db";
 import {
-	DEFAULT_AGENT_MODEL,
-	DEFAULT_OPENROUTER_MODEL,
 	getActiveAiProvider,
 	getDefaultModelForProvider,
 	maskKey,
-	readAgentModel,
 	readArchiveRetentionDays,
 	readContextDevKey,
 	readContextDevSkipped,
@@ -65,7 +62,8 @@ export class SettingsService {
 			selectedId: row?.agentModelId ?? null,
 			effectiveId: resolved.id,
 			defaultId: defaultModel.id,
-			effective: catalogModels?.find((model) => model.id === resolved.id) ?? null,
+			effective:
+				catalogModels?.find((model) => model.id === resolved.id) ?? null,
 			updatedAt: row?.updatedAt.toISOString() ?? null,
 			unavailableOnCurrentProvider: resolved.unavailableOnCurrentProvider,
 		};
