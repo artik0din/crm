@@ -1,6 +1,6 @@
 "use client";
 
-import { SORTABLE_FIELD_TYPES } from "@crm/db/fields";
+import { SORTABLE_FIELD_TYPES } from "@crm/db/fields-shape";
 import type { DataTableColumn } from "@crm/ui/components/data-table";
 import { EmptyCellValue } from "@crm/ui/components/empty-cell";
 import { formatDay } from "@crm/ui/lib/format";

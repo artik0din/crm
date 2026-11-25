@@ -1,6 +1,9 @@
 "use client";
 
-import { NUMBER_BUCKETS, TEXT_FILTERABLE_FIELD_TYPES } from "@crm/db/fields";
+import {
+	NUMBER_BUCKETS,
+	TEXT_FILTERABLE_FIELD_TYPES,
+} from "@crm/db/fields-shape";
 import type { DataTableFacet } from "@crm/ui/components/data-table";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
