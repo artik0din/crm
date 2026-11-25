@@ -26,16 +26,28 @@ export function validateOpenRouterKey(key?: string): void {
 	}
 }
 
+function wellFormedOpenRouterKey(key?: string): boolean {
+	try {
+		validateOpenRouterKey(key);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 export function validateStartup(): void {
-	validateOpenRouterKey(process.env.OPENROUTER_API_KEY);
+	if (!wellFormedOpenRouterKey(process.env.OPENROUTER_API_KEY)) {
+		console.warn(
+			"[agent] OPENROUTER_API_KEY is malformed: it must start with 'sk-or-'. OpenRouter is off.",
+		);
+	}
 }
 
 export function getProvider(
 	env: Record<string, string | undefined> = process.env,
 ): AiProvider {
 	const openrouterKey = env.OPENROUTER_API_KEY?.trim();
-	if (openrouterKey) {
-		validateOpenRouterKey(openrouterKey);
+	if (openrouterKey && wellFormedOpenRouterKey(openrouterKey)) {
 		return "openrouter";
 	}
 	if (env.AI_GATEWAY_API_KEY?.trim()) {

@@ -49,10 +49,12 @@ describe("provider selection", () => {
 		expect(getProvider()).toBe("none");
 	});
 
-	it("rejects an OPENROUTER_API_KEY missing the sk-or- prefix", () => {
+	it("turns OpenRouter off for an OPENROUTER_API_KEY missing the sk-or- prefix", () => {
 		process.env.OPENROUTER_API_KEY = "sk-ant-invalid-prefix";
-		expect(() => validateStartup()).toThrow();
-		expect(() => getProvider()).toThrow();
+		expect(() => validateStartup()).not.toThrow();
+		expect(() => getProvider()).not.toThrow();
+		expect(getProvider()).toBe("none");
+		expect(() => validateOpenRouterKey("sk-ant-invalid-prefix")).toThrow();
 	});
 
 	it("accepts a valid sk-or- key", () => {
