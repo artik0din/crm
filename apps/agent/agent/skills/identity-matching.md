@@ -90,7 +90,7 @@ Do not add evidence you did not observe to push a claim over a line.
   Seattle — all with total confidence.
 - **A matching first name.** Half the Chrises at a company are not your Chris.
   The surname or the employer has to carry it.
-- **Perplexity's view of somebody's job title.** It aggregates stale sources; it
+- **Web research view of somebody's job title.** It aggregates stale sources; it
   said "Account Executive L3" for a profile that reads "Growth Specialist at
   Fernhill". For identity, the person's own profile wins.
 - **A very plausible expansion.** `jsmith` is probably J. Smith. Probably is not

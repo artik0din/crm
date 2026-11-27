@@ -1,6 +1,7 @@
 import { PRIORITY } from "@crm/db/agent-tasks";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
+import { DISPATCH } from "../lib/dispatch-config";
 import { assertResearchPurpose } from "../lib/session-purpose";
 import { scheduleTask } from "../lib/tasks";
 
@@ -36,6 +37,14 @@ export default defineTool({
 	}),
 	async execute({ contactId, days, reason, budget }, ctx) {
 		assertResearchPurpose(ctx);
+
+		if (!DISPATCH.automaticEnrichment) {
+			return {
+				scheduled: false as const,
+				reason: "Automatic enrichment is disabled.",
+			};
+		}
+
 		const dueAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 
 		await scheduleTask({

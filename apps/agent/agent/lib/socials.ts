@@ -5,7 +5,7 @@ import {
 	nameMatchesLocalPart,
 	namesMatch,
 } from "./names";
-import { ask } from "./perplexity";
+import { ask } from "./web-research";
 
 const text = z.string().trim().min(1).nullable().catch(null);
 const rawText = z.string().nullable().catch(null);

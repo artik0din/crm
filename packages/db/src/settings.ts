@@ -12,27 +12,130 @@ export const DEFAULT_AGENT_MODEL = {
 	contextWindowTokens: 1_000_000,
 } as const;
 
+export const DEFAULT_OPENROUTER_MODEL = {
+	id: "z-ai/glm-5.3-flash",
+	contextWindowTokens: 128_000,
+} as const;
+
+export type AiProvider = "openrouter" | "gateway";
+
+export function getActiveAiProvider(
+	env: Record<string, string | undefined> = process.env,
+): AiProvider {
+	const key = env.OPENROUTER_API_KEY?.trim();
+	return key ? "openrouter" : "gateway";
+}
+
+export function getDefaultModelForProvider(provider: AiProvider): {
+	id: string;
+	contextWindowTokens: number;
+} {
+	return provider === "openrouter"
+		? DEFAULT_OPENROUTER_MODEL
+		: DEFAULT_AGENT_MODEL;
+}
+
 export interface AgentModelSetting {
 	id: string;
 	contextWindowTokens: number;
 	isDefault: boolean;
 }
 
-export async function readAgentModel(db: Db): Promise<AgentModelSetting> {
+export interface EffectiveModelSetting {
+	id: string;
+	contextWindowTokens: number;
+	isDefault: boolean;
+	unavailableOnCurrentProvider: boolean;
+}
+
+export function resolveModelForProvider(
+	savedId: string | null | undefined,
+	savedTokens: number | null | undefined,
+	provider: AiProvider,
+	validModelIds?: string[] | null,
+): EffectiveModelSetting {
+	const defaultModel = getDefaultModelForProvider(provider);
+	if (!savedId) {
+		return {
+			...defaultModel,
+			isDefault: true,
+			unavailableOnCurrentProvider: false,
+		};
+	}
+
+	if (provider === "openrouter") {
+		if (savedId === DEFAULT_AGENT_MODEL.id || savedId.startsWith("zai/")) {
+			return {
+				...defaultModel,
+				isDefault: false,
+				unavailableOnCurrentProvider: true,
+			};
+		}
+	} else {
+		if (
+			savedId === DEFAULT_OPENROUTER_MODEL.id ||
+			savedId.startsWith("z-ai/")
+		) {
+			return {
+				...defaultModel,
+				isDefault: false,
+				unavailableOnCurrentProvider: true,
+			};
+		}
+	}
+
+	if (
+		validModelIds &&
+		validModelIds.length > 0 &&
+		!validModelIds.includes(savedId)
+	) {
+		return {
+			...defaultModel,
+			isDefault: false,
+			unavailableOnCurrentProvider: true,
+		};
+	}
+
+	return {
+		id: savedId,
+		contextWindowTokens: savedTokens ?? defaultModel.contextWindowTokens,
+		isDefault: false,
+		unavailableOnCurrentProvider: false,
+	};
+}
+
+export async function resolveAgentModel(
+	db: Db,
+	options?: {
+		provider?: AiProvider;
+		validModelIds?: string[] | null;
+		env?: Record<string, string | undefined>;
+	},
+): Promise<EffectiveModelSetting> {
+	const env = options?.env ?? process.env;
+	const provider = options?.provider ?? getActiveAiProvider(env);
 	const row = await db.appSetting.findUnique({
 		where: { id: SETTINGS_ID },
 		select: { agentModelId: true, agentModelContextWindow: true },
 	});
 
-	if (!row?.agentModelId) {
-		return { ...DEFAULT_AGENT_MODEL, isDefault: true };
-	}
+	return resolveModelForProvider(
+		row?.agentModelId,
+		row?.agentModelContextWindow,
+		provider,
+		options?.validModelIds,
+	);
+}
 
+export async function readAgentModel(
+	db: Db,
+	env: Record<string, string | undefined> = process.env,
+): Promise<AgentModelSetting> {
+	const resolved = await resolveAgentModel(db, { env });
 	return {
-		id: row.agentModelId,
-		contextWindowTokens:
-			row.agentModelContextWindow ?? DEFAULT_AGENT_MODEL.contextWindowTokens,
-		isDefault: false,
+		id: resolved.id,
+		contextWindowTokens: resolved.contextWindowTokens,
+		isDefault: resolved.isDefault,
 	};
 }
 

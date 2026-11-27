@@ -686,7 +686,7 @@ export class ContactsService {
 			data: { enrichmentStatus: "PENDING", enrichmentError: null },
 		});
 
-		await this.agent.contactCreated(
+		await this.agent.contactRequested(
 			id,
 			contact.linkedinUrl && !contact.imageUrl
 				? "A rep asked for a fresh look — they have a LinkedIn profile on file but no picture"

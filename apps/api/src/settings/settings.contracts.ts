@@ -20,6 +20,7 @@ export const agentModelOutput = z.object({
 	defaultId: z.string(),
 	effective: catalogModelOutput.nullable(),
 	updatedAt: z.string().nullable(),
+	unavailableOnCurrentProvider: z.boolean().catch(false),
 });
 
 export type AgentModelSettings = z.infer<typeof agentModelOutput>;

@@ -2,6 +2,7 @@ const SECOND_MS = 1_000;
 const MINUTE_MS = 60 * SECOND_MS;
 
 export const AGENT_DISPATCH = {
+	automaticEnrichment: false,
 	poke: { timeoutMs: 2 * SECOND_MS },
 	heartbeat: { everyMs: MINUTE_MS },
 	cancel: {
