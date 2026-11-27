@@ -34,6 +34,21 @@ function render(
 	return String(value);
 }
 
+function renderTitle(
+	type: string,
+	value: string | number | boolean | null,
+	users: Map<string, Owner>,
+): string | undefined {
+	if (value === null || value === "") return undefined;
+	if (type === "CHECKBOX") return value === true ? "Yes" : "No";
+	if (type === "DATE") return formatDay(String(value));
+	if (type === "USER") {
+		const user = users.get(String(value));
+		return user?.name;
+	}
+	return String(value);
+}
+
 export function useFieldColumns<Row extends WithFields>(
 	entity: FieldEntity,
 ): DataTableColumn<Row>[] {
@@ -60,13 +75,18 @@ export function useFieldColumns<Row extends WithFields>(
 				id: `field:${field.key}`,
 				header: field.label,
 				sortable: SORTABLE_FIELD_TYPES_SET.has(field.type),
-				width: "w-[12%]",
+				width: "12rem",
 				hideBelow: "lg" as const,
-				cell: (row: Row) => (
-					<span className="truncate">
-						{render(field.type, row.fields[field.key] ?? null, byId)}
-					</span>
-				),
+				cell: (row: Row) => {
+					const value = row.fields[field.key] ?? null;
+					const rendered = render(field.type, value, byId);
+					const title = renderTitle(field.type, value, byId);
+					return (
+						<span className="truncate" title={title}>
+							{rendered}
+						</span>
+					);
+				},
 			}));
 	}, [fields, byId]);
 }

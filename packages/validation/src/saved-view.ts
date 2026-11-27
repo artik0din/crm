@@ -7,6 +7,7 @@ export const savedViewFilters = z.object({
 	dir: z.enum(["asc", "desc"]).default("asc"),
 	archived: z.boolean().default(false),
 	filters: z.record(z.string(), z.array(z.string())).default({}),
+	hide: z.array(z.string()).optional(),
 });
 
 export type SavedViewFilters = z.infer<typeof savedViewFilters>;

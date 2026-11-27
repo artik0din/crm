@@ -37,21 +37,25 @@ const COLUMNS: DataTableColumn<DealRow>[] = [
 		header: "Deal",
 		sortable: true,
 		hideable: false,
-		width: "w-[24%]",
-		cell: (row) => <span className="truncate font-medium">{row.name}</span>,
+		width: "16rem",
+		cell: (row) => (
+			<span className="truncate font-medium" title={row.name}>
+				{row.name}
+			</span>
+		),
 	},
 	{
 		id: "company",
 		header: "Company",
 		sortable: true,
-		width: "w-[18%]",
+		width: "13rem",
 		cell: (row) => <CompanyCell company={row.company} />,
 	},
 	{
 		id: "stage",
 		header: "Stage",
 		sortable: true,
-		width: "w-[18%]",
+		width: "12rem",
 		cell: (row) => <DealStageMenu dealId={row.id} stage={row.stage} />,
 	},
 	{
@@ -59,7 +63,7 @@ const COLUMNS: DataTableColumn<DealRow>[] = [
 		header: "Amount",
 		sortable: true,
 		align: "right",
-		width: "w-[12%]",
+		width: "10rem",
 		hideBelow: "sm",
 		cell: (row) =>
 			row.amountCents === null ? (
@@ -74,7 +78,7 @@ const COLUMNS: DataTableColumn<DealRow>[] = [
 		id: "owner",
 		header: "Owner",
 		sortable: true,
-		width: "w-[14%]",
+		width: "12rem",
 		hideBelow: "md",
 		cell: (row) => <OwnerCell owner={row.owner} />,
 	},
@@ -82,7 +86,7 @@ const COLUMNS: DataTableColumn<DealRow>[] = [
 		id: "expectedCloseDate",
 		header: "Close date",
 		sortable: true,
-		width: "w-[12%]",
+		width: "10rem",
 		hideBelow: "lg",
 		cell: (row) =>
 			row.expectedCloseDate ? (
@@ -99,7 +103,7 @@ const COLUMNS: DataTableColumn<DealRow>[] = [
 		label: "Created date",
 		sortable: true,
 		align: "right",
-		width: "w-[10%]",
+		width: "10rem",
 		defaultHidden: true,
 		cell: (row) => (
 			<span className="text-muted-foreground">
@@ -112,7 +116,7 @@ const COLUMNS: DataTableColumn<DealRow>[] = [
 		header: "Last activity",
 		sortable: true,
 		align: "right",
-		width: "w-[12%]",
+		width: "10rem",
 		hideBelow: "lg",
 		cell: (row) => (
 			<span className="text-muted-foreground">
@@ -132,7 +136,7 @@ const ARCHIVED_COLUMN: DataTableColumn<DealRow> = {
 	label: "Archived date",
 	sortable: true,
 	align: "right",
-	width: "w-[12%]",
+	width: "10rem",
 	cell: (row) => (
 		<span className="text-muted-foreground">
 			{row.archivedAt ? (
@@ -229,6 +233,7 @@ export function DealsTable() {
 
 	return (
 		<DataTable
+			storageKey="deals"
 			query={query}
 			search={<ListSearch placeholder="Search deals by name or company…" />}
 			actions={

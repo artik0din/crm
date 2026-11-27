@@ -38,7 +38,7 @@ const COLUMNS: DataTableColumn<ContactRow>[] = [
 		header: "Name",
 		sortable: true,
 		hideable: false,
-		width: "w-[22%]",
+		width: "16rem",
 		cell: (row) => (
 			<span className="flex min-w-0 items-center gap-2">
 				<PersonAvatar
@@ -47,7 +47,9 @@ const COLUMNS: DataTableColumn<ContactRow>[] = [
 					email={row.email}
 					size="sm"
 				/>
-				<span className="truncate font-medium">{contactName(row)}</span>
+				<span className="truncate font-medium" title={contactName(row)}>
+					{contactName(row)}
+				</span>
 			</span>
 		),
 	},
@@ -55,11 +57,13 @@ const COLUMNS: DataTableColumn<ContactRow>[] = [
 		id: "title",
 		header: "Title",
 		sortable: true,
-		width: "w-[20%]",
+		width: "13rem",
 		hideBelow: "lg",
 		cell: (row) =>
 			row.title ? (
-				<span className="truncate">{row.title}</span>
+				<span className="truncate" title={row.title}>
+					{row.title}
+				</span>
 			) : (
 				<EmptyCellValue />
 			),
@@ -68,11 +72,29 @@ const COLUMNS: DataTableColumn<ContactRow>[] = [
 		id: "email",
 		header: "Email",
 		sortable: true,
-		width: "w-[24%]",
+		width: "15rem",
 		hideBelow: "md",
 		cell: (row) =>
 			row.email ? (
-				<span className="truncate text-muted-foreground">{row.email}</span>
+				<span className="truncate text-muted-foreground" title={row.email}>
+					{row.email}
+				</span>
+			) : (
+				<EmptyCellValue />
+			),
+	},
+	{
+		id: "phone",
+		header: "Phone",
+		sortable: true,
+		defaultHidden: true,
+		width: "12rem",
+		hideBelow: "lg",
+		cell: (row) =>
+			row.phone ? (
+				<span className="truncate text-muted-foreground" title={row.phone}>
+					{row.phone}
+				</span>
 			) : (
 				<EmptyCellValue />
 			),
@@ -81,14 +103,14 @@ const COLUMNS: DataTableColumn<ContactRow>[] = [
 		id: "company",
 		header: "Company",
 		sortable: true,
-		width: "w-[18%]",
+		width: "13rem",
 		cell: (row) => <CompanyCell company={row.company} />,
 	},
 	{
 		id: "owner",
 		header: "Owner",
 		sortable: true,
-		width: "w-[16%]",
+		width: "12rem",
 		hideBelow: "md",
 		cell: (row) => <OwnerCell owner={row.owner} />,
 	},
@@ -98,7 +120,7 @@ const COLUMNS: DataTableColumn<ContactRow>[] = [
 		label: "Created date",
 		sortable: true,
 		align: "right",
-		width: "w-[10%]",
+		width: "10rem",
 		defaultHidden: true,
 		cell: (row) => (
 			<span className="text-muted-foreground">
@@ -111,7 +133,7 @@ const COLUMNS: DataTableColumn<ContactRow>[] = [
 		header: "Last activity",
 		sortable: true,
 		align: "right",
-		width: "w-[12%]",
+		width: "10rem",
 		hideBelow: "sm",
 		cell: (row) => (
 			<span className="text-muted-foreground">
@@ -131,7 +153,7 @@ const ARCHIVED_COLUMN: DataTableColumn<ContactRow> = {
 	label: "Archived date",
 	sortable: true,
 	align: "right",
-	width: "w-[12%]",
+	width: "10rem",
 	cell: (row) => (
 		<span className="text-muted-foreground">
 			{row.archivedAt ? (
@@ -265,6 +287,7 @@ export function ContactsTable() {
 
 	return (
 		<DataTable
+			storageKey="contacts"
 			query={query}
 			search={<ListSearch placeholder="Search by name, email or company…" />}
 			actions={

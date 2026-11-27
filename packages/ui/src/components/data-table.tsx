@@ -50,8 +50,10 @@ import {
 	Fragment,
 	type ReactNode,
 	useDeferredValue,
+	useEffect,
 	useId,
 	useMemo,
+	useRef,
 	useState,
 } from "react";
 
@@ -122,6 +124,7 @@ export type DataTableProps<TRow, TSub> = {
 	empty?: ReactNode;
 	className?: string;
 	tableClassName?: string;
+	storageKey?: string;
 };
 
 const HIDE_BELOW_CLASS = {
@@ -135,6 +138,143 @@ const ALIGN_CLASS = {
 	right: "text-right",
 	center: "text-center",
 } as const;
+
+const DEFAULT_COLUMN_WIDTH_REM = 11;
+export const MIN_COLUMN_WIDTH_REM = 6;
+export const MAX_COLUMN_WIDTH_REM = 40;
+
+export function resizeColumnWidth(current: number, delta: number): number {
+	return Math.min(
+		MAX_COLUMN_WIDTH_REM,
+		Math.max(MIN_COLUMN_WIDTH_REM, Math.round((current + delta) * 10) / 10),
+	);
+}
+
+export function readStoredWidths(key?: string): Record<string, number> {
+	if (!key || typeof window === "undefined") return {};
+	try {
+		const raw = window.localStorage.getItem(key);
+		if (!raw) return {};
+		const parsed = JSON.parse(raw);
+		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+			const result: Record<string, number> = {};
+			for (const [colId, val] of Object.entries(parsed)) {
+				if (typeof val === "number" && !Number.isNaN(val)) {
+					result[colId] = Math.min(
+						MAX_COLUMN_WIDTH_REM,
+						Math.max(MIN_COLUMN_WIDTH_REM, val),
+					);
+				}
+			}
+			return result;
+		}
+	} catch {
+		return {};
+	}
+	return {};
+}
+
+export function writeStoredWidths(
+	key: string | undefined,
+	widths: Record<string, number>,
+): void {
+	if (!key || typeof window === "undefined") return;
+	try {
+		window.localStorage.setItem(key, JSON.stringify(widths));
+	} catch {}
+}
+
+function parseWidthRem(width?: string): number {
+	if (!width) return DEFAULT_COLUMN_WIDTH_REM;
+	const remMatch = width.match(/(\d+(?:\.\d+)?)rem/);
+	if (remMatch?.[1]) return parseFloat(remMatch[1]);
+	const pxMatch = width.match(/(\d+(?:\.\d+)?)px/);
+	if (pxMatch?.[1]) return parseFloat(pxMatch[1]) / 16;
+	const twMatch = width.match(/^w-(\d+)$/);
+	if (twMatch?.[1]) return parseInt(twMatch[1], 10) / 4;
+	return DEFAULT_COLUMN_WIDTH_REM;
+}
+
+export type ColumnDragOptions = {
+	columnId: string;
+	startWidth: number;
+	startX: number;
+	pointerId: number;
+	target?: {
+		setPointerCapture?: (id: number) => void;
+		releasePointerCapture?: (id: number) => void;
+		hasPointerCapture?: (id: number) => boolean;
+	} | null;
+	onMove: (width: number) => void;
+	onEnd: () => void;
+};
+
+export function startColumnDrag({
+	columnId,
+	startWidth,
+	startX,
+	pointerId,
+	target,
+	onMove,
+	onEnd,
+}: ColumnDragOptions): () => void {
+	try {
+		target?.setPointerCapture?.(pointerId);
+	} catch {}
+
+	let ended = false;
+	const handleEnd = () => {
+		if (ended) return;
+		ended = true;
+		cleanup();
+		onEnd();
+	};
+
+	const handlePointerMove = (e: PointerEvent) => {
+		if (!e.isPrimary) return;
+		const deltaPx = e.clientX - startX;
+		const deltaRem = deltaPx / 16;
+		onMove(resizeColumnWidth(startWidth + deltaRem, 0));
+	};
+
+	const handlePointerUp = (e: PointerEvent) => {
+		if (e.pointerId !== pointerId) return;
+		handleEnd();
+	};
+
+	const handlePointerCancel = (e: PointerEvent) => {
+		if (e.pointerId !== pointerId) return;
+		handleEnd();
+	};
+
+	const handleLostCapture = (e: PointerEvent) => {
+		if (e.pointerId !== pointerId) return;
+		handleEnd();
+	};
+
+	const cleanup = () => {
+		if (typeof window !== "undefined") {
+			window.removeEventListener("pointermove", handlePointerMove);
+			window.removeEventListener("pointerup", handlePointerUp);
+			window.removeEventListener("pointercancel", handlePointerCancel);
+			window.removeEventListener("lostpointercapture", handleLostCapture);
+		}
+		try {
+			if (target?.hasPointerCapture?.(pointerId)) {
+				target.releasePointerCapture?.(pointerId);
+			}
+		} catch {}
+	};
+
+	if (typeof window !== "undefined") {
+		window.addEventListener("pointermove", handlePointerMove);
+		window.addEventListener("pointerup", handlePointerUp);
+		window.addEventListener("pointercancel", handlePointerCancel);
+		window.addEventListener("lostpointercapture", handleLostCapture);
+	}
+
+	return cleanup;
+}
 
 function columnLabel<TRow>(column: DataTableColumn<TRow>): string {
 	if (column.label) return column.label;
@@ -284,6 +424,7 @@ export function DataTable<TRow, TSub = unknown>({
 	empty,
 	className,
 	tableClassName,
+	storageKey,
 }: DataTableProps<TRow, TSub>) {
 	const [expandedIds, setExpandedIds] = useQueryState(
 		"expand",
@@ -298,8 +439,81 @@ export function DataTable<TRow, TSub = unknown>({
 		"hide",
 		parseAsArrayOf(parseAsString).withDefault(defaultHiddenIds),
 	);
+	const [isScrolled, setIsScrolled] = useState(false);
+	const isResizable = Boolean(storageKey);
+	const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+
+	useEffect(() => {
+		if (!storageKey) return;
+		const stored = readStoredWidths(storageKey);
+		if (Object.keys(stored).length > 0) {
+			setColumnWidths(stored);
+		}
+	}, [storageKey]);
 	const [filtersOpen, setFiltersOpen] = useState(false);
 	const filtersId = useId();
+	const dragCleanupRef = useRef<(() => void) | null>(null);
+
+	useEffect(() => {
+		return () => {
+			dragCleanupRef.current?.();
+		};
+	}, []);
+
+	const startResize = (
+		columnId: string,
+		startWidth: number,
+		event: React.PointerEvent,
+	) => {
+		if (event.button !== 0 || !event.isPrimary) return;
+		event.preventDefault();
+		event.stopPropagation();
+
+		dragCleanupRef.current?.();
+		dragCleanupRef.current = startColumnDrag({
+			columnId,
+			startWidth,
+			startX: event.clientX,
+			pointerId: event.pointerId,
+			target: event.currentTarget,
+			onMove: (newWidth) => {
+				setColumnWidths((prev) => ({ ...prev, [columnId]: newWidth }));
+			},
+			onEnd: () => {
+				dragCleanupRef.current = null;
+				setColumnWidths((prev) => {
+					writeStoredWidths(storageKey, prev);
+					return prev;
+				});
+			},
+		});
+	};
+
+	const handleResizeKey = (
+		columnId: string,
+		currentWidth: number,
+		event: React.KeyboardEvent,
+	) => {
+		if (event.key === "ArrowLeft") {
+			event.preventDefault();
+			event.stopPropagation();
+			const next = resizeColumnWidth(currentWidth, -1);
+			setColumnWidths((prev) => {
+				const updated = { ...prev, [columnId]: next };
+				writeStoredWidths(storageKey, updated);
+				return updated;
+			});
+		} else if (event.key === "ArrowRight") {
+			event.preventDefault();
+			event.stopPropagation();
+			const next = resizeColumnWidth(currentWidth, 1);
+			setColumnWidths((prev) => {
+				const updated = { ...prev, [columnId]: next };
+				writeStoredWidths(storageKey, updated);
+				return updated;
+			});
+		}
+	};
 
 	const hideable = columns.filter((column) => column.hideable !== false);
 	const visibleColumns = columns.filter(
@@ -574,10 +788,14 @@ export function DataTable<TRow, TSub = unknown>({
 
 			<Table
 				className={cn(
-					"table-fixed [&_td:first-child]:pl-4 [&_th:first-child]:pl-4 [&_td:last-child]:pr-4 [&_th:last-child]:pr-4",
+					isResizable ? "table-fixed w-max min-w-full" : "table-fixed w-full",
+					"[&_td:first-child]:pl-4 [&_th:first-child]:pl-4 [&_td:last-child]:pr-4 [&_th:last-child]:pr-4",
 					tableClassName,
 				)}
 				containerClassName="min-h-0 flex-1 overflow-auto rounded-lg border bg-card"
+				onScroll={
+					isResizable ? (e) => setIsScrolled(e.currentTarget.scrollLeft > 0) : undefined
+				}
 				overlay={
 					deferredRows.length === 0 ? (
 						<div className="absolute inset-x-0 top-11 bottom-0 flex items-center justify-center px-4 py-8 text-center text-muted-foreground">
@@ -586,10 +804,27 @@ export function DataTable<TRow, TSub = unknown>({
 					) : null
 				}
 			>
-				<TableHeader className="sticky top-0 z-10 bg-muted [&_th]:bg-muted [&_tr]:border-0 [&_tr]:shadow-[inset_0_-1px_0_var(--border)]">
+				<TableHeader
+					className={cn(
+						"sticky top-0 bg-muted [&_th]:bg-muted [&_tr]:border-0 [&_tr]:shadow-[inset_0_-1px_0_var(--border)]",
+						isResizable ? "z-20" : "z-10",
+					)}
+				>
 					<TableRow>
 						{selection && (
-							<TableHead className={cn("h-11 w-10 px-3", HIDE_BELOW_CLASS.sm)}>
+							<TableHead
+								className={cn(
+									isResizable
+										? "sticky left-0 z-30 bg-muted h-11 w-10 px-3"
+										: "h-11 w-10 px-3",
+									HIDE_BELOW_CLASS.sm,
+								)}
+								style={
+									isResizable
+										? { width: "2.5rem", minWidth: "2.5rem", maxWidth: "2.5rem" }
+										: undefined
+								}
+							>
 								<Checkbox
 									checked={
 										selection.state.allSelected
@@ -611,17 +846,47 @@ export function DataTable<TRow, TSub = unknown>({
 								<span className="sr-only">Detail</span>
 							</TableHead>
 						)}
-						{visibleColumns.map((column) => {
+						{visibleColumns.map((column, index) => {
+							const isFirst = index === 0;
+							const widthRem = Math.min(
+								MAX_COLUMN_WIDTH_REM,
+								Math.max(
+									MIN_COLUMN_WIDTH_REM,
+									columnWidths[column.id] ?? parseWidthRem(column.width),
+								),
+							);
+							const isClassWidth =
+								column.width &&
+								(column.width.startsWith("w-") || column.width.includes(" "));
+							const stickyHeadClass =
+								isResizable && isFirst
+									? cn(
+											"sm:sticky sm:z-30 bg-muted sm:max-w-[45vw]",
+											selection ? "left-0 sm:left-10" : "left-0",
+											isScrolled &&
+												"sm:shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
+										)
+									: undefined;
 							const isActive = query.sort === column.id;
 							return (
 								<TableHead
 									key={column.id}
+									style={
+										isResizable
+											? {
+													width: `${widthRem}rem`,
+													minWidth: `${widthRem}rem`,
+													maxWidth: `${widthRem}rem`,
+												}
+											: undefined
+									}
 									className={cn(
-										"h-11 overflow-hidden px-3 font-normal text-muted-foreground",
-										column.width,
+										"relative h-11 overflow-hidden px-3 font-normal text-muted-foreground",
+										(!isResizable || isClassWidth) && column.width,
 										ALIGN_CLASS[column.align ?? "left"],
 										column.hideBelow && HIDE_BELOW_CLASS[column.hideBelow],
 										column.headClassName,
+										stickyHeadClass,
 									)}
 									aria-sort={
 										isActive
@@ -647,6 +912,25 @@ export function DataTable<TRow, TSub = unknown>({
 										</Button>
 									) : (
 										column.header
+									)}
+									{isResizable && (
+										<div
+											role="separator"
+											aria-orientation="vertical"
+											aria-label={`Resize ${columnLabel(column)} column`}
+											aria-valuenow={Math.round(widthRem)}
+											aria-valuemin={MIN_COLUMN_WIDTH_REM}
+											aria-valuemax={MAX_COLUMN_WIDTH_REM}
+											tabIndex={0}
+											onPointerDown={(event) =>
+												startResize(column.id, widthRem, event)
+											}
+											onKeyDown={(event) =>
+												handleResizeKey(column.id, widthRem, event)
+											}
+											onClick={(event) => event.stopPropagation()}
+											className="absolute top-0 right-0 bottom-0 w-2.5 cursor-col-resize select-none touch-none hover:bg-border/60 focus-visible:bg-primary focus-visible:outline-none"
+										/>
 									)}
 								</TableHead>
 							);
@@ -680,17 +964,34 @@ export function DataTable<TRow, TSub = unknown>({
 									onClick={clickable ? handleClick : undefined}
 									onMouseEnter={onRowHover ? () => onRowHover(row) : undefined}
 									onFocus={onRowHover ? () => onRowHover(row) : undefined}
-									className={
+									className={cn(
+										"group",
 										clickable
 											? anyExpandable
 												? ROW_ACCENT_EXPANDABLE
 												: ROW_ACCENT
-											: undefined
-									}
+											: undefined,
+										isResizable &&
+											"[&>td.sticky]:sticky [&>td:first-child.sticky]:sticky",
+									)}
 								>
 									{selection && (
 										<TableCell
-											className={cn("w-10 px-3 py-3", HIDE_BELOW_CLASS.sm)}
+											className={cn(
+												isResizable
+													? "sticky left-0 z-10 bg-card group-hover:bg-muted/60 group-data-[state=selected]:bg-muted w-10 px-3 py-3"
+													: "w-10 px-3 py-3",
+												HIDE_BELOW_CLASS.sm,
+											)}
+											style={
+												isResizable
+													? {
+															width: "2.5rem",
+															minWidth: "2.5rem",
+															maxWidth: "2.5rem",
+														}
+													: undefined
+											}
 											onClick={(event) => event.stopPropagation()}
 										>
 											<Checkbox
@@ -719,20 +1020,53 @@ export function DataTable<TRow, TSub = unknown>({
 											)}
 										</TableCell>
 									)}
-									{visibleColumns.map((column) => (
-										<TableCell
-											key={column.id}
-											className={cn(
-												"overflow-hidden px-3 py-3",
-												column.width,
-												ALIGN_CLASS[column.align ?? "left"],
-												column.hideBelow && HIDE_BELOW_CLASS[column.hideBelow],
-												column.cellClassName,
-											)}
-										>
-											{column.cell(row)}
-										</TableCell>
-									))}
+									{visibleColumns.map((column, index) => {
+										const isFirst = index === 0;
+										const widthRem = Math.min(
+											MAX_COLUMN_WIDTH_REM,
+											Math.max(
+												MIN_COLUMN_WIDTH_REM,
+												columnWidths[column.id] ?? parseWidthRem(column.width),
+											),
+										);
+										const isClassWidth =
+											column.width &&
+											(column.width.startsWith("w-") ||
+												column.width.includes(" "));
+										const stickyCellClass =
+											isResizable && isFirst
+												? cn(
+														"sm:sticky sm:z-10 bg-card group-hover:bg-muted/60 group-data-[state=selected]:bg-muted sm:max-w-[45vw]",
+														selection ? "left-0 sm:left-10" : "left-0",
+														isScrolled &&
+															"sm:shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
+													)
+												: undefined;
+										return (
+											<TableCell
+												key={column.id}
+												style={
+													isResizable
+														? {
+																width: `${widthRem}rem`,
+																minWidth: `${widthRem}rem`,
+																maxWidth: `${widthRem}rem`,
+															}
+														: undefined
+												}
+												className={cn(
+													"overflow-hidden px-3 py-3",
+													(!isResizable || isClassWidth) && column.width,
+													ALIGN_CLASS[column.align ?? "left"],
+													column.hideBelow && HIDE_BELOW_CLASS[column.hideBelow],
+													column.cellClassName,
+													stickyCellClass,
+												)}
+											>
+												{column.cell(row)}
+											</TableCell>
+										);
+									})}
 								</TableRow>
 								{isOpen &&
 									expandable?.getSubRows(row).map((sub) => {
@@ -746,39 +1080,85 @@ export function DataTable<TRow, TSub = unknown>({
 														: undefined
 												}
 												className={cn(
-													"bg-muted/30",
+													"group bg-muted/30",
 													subClickable &&
 														(anyExpandable
 															? ROW_ACCENT_EXPANDABLE
 															: ROW_ACCENT),
+													isResizable &&
+														"[&>td.sticky]:sticky [&>td:first-child.sticky]:sticky",
 												)}
 											>
 												{selection && (
 													<TableCell
 														className={cn(
-															"w-10 px-3 py-2.5",
+															isResizable
+																? "sticky left-0 z-10 bg-muted/30 w-10 px-3 py-2.5"
+																: "w-10 px-3 py-2.5",
 															HIDE_BELOW_CLASS.sm,
 														)}
+														style={
+															isResizable
+																? {
+																		width: "2.5rem",
+																		minWidth: "2.5rem",
+																		maxWidth: "2.5rem",
+																	}
+																: undefined
+														}
 													/>
 												)}
 												{anyExpandable && (
 													<TableCell className="w-10 px-3 py-2.5" />
 												)}
-												{visibleColumns.map((column) => (
-													<TableCell
-														key={column.id}
-														className={cn(
-															"overflow-hidden px-3 py-2.5 align-top",
-															column.width,
-															ALIGN_CLASS[column.align ?? "left"],
-															column.hideBelow &&
-																HIDE_BELOW_CLASS[column.hideBelow],
-															column.cellClassName,
-														)}
-													>
-														{expandable.renderSubCell(sub, column.id, row)}
-													</TableCell>
-												))}
+												{visibleColumns.map((column, index) => {
+													const isFirst = index === 0;
+													const widthRem = Math.min(
+														MAX_COLUMN_WIDTH_REM,
+														Math.max(
+															MIN_COLUMN_WIDTH_REM,
+															columnWidths[column.id] ?? parseWidthRem(column.width),
+														),
+													);
+													const isClassWidth =
+														column.width &&
+														(column.width.startsWith("w-") ||
+															column.width.includes(" "));
+													const stickySubCellClass =
+														isResizable && isFirst
+															? cn(
+																	"sm:sticky sm:z-10 bg-muted/30 group-hover:bg-muted/60 sm:max-w-[45vw]",
+																	selection ? "left-0 sm:left-10" : "left-0",
+																	isScrolled &&
+																		"sm:shadow-[inset_-1px_0_0_var(--border),2px_0_4px_-2px_rgba(0,0,0,0.12)]",
+																)
+															: undefined;
+													return (
+														<TableCell
+															key={column.id}
+															style={
+																isResizable
+																	? {
+																			width: `${widthRem}rem`,
+																			minWidth: `${widthRem}rem`,
+																			maxWidth: `${widthRem}rem`,
+																		}
+																	: undefined
+															}
+															className={cn(
+																"overflow-hidden px-3 py-2.5 align-top",
+																(!isResizable || isClassWidth) && column.width,
+																ALIGN_CLASS[column.align ?? "left"],
+																column.hideBelow &&
+																	HIDE_BELOW_CLASS[column.hideBelow],
+																column.cellClassName,
+																stickySubCellClass,
+															)}
+														>
+															{expandable.renderSubCell(sub, column.id, row)}
+														</TableCell>
+													);
+												})}
 											</TableRow>
 										);
 									})}

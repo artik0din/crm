@@ -7,8 +7,12 @@ import { PageTransition } from "./page-transition";
 function PageShell({
 	className,
 	contained = false,
+	width = "default",
 	...props
-}: React.ComponentProps<"div"> & { contained?: boolean }) {
+}: React.ComponentProps<"div"> & {
+	contained?: boolean;
+	width?: "default" | "full";
+}) {
 	return (
 		<PageTransition>
 			<main
@@ -21,7 +25,8 @@ function PageShell({
 				<div
 					data-slot="page-shell"
 					className={cn(
-						"mx-auto flex w-full min-w-0 max-w-7xl flex-1 flex-col gap-6",
+						"mx-auto flex w-full min-w-0 flex-1 flex-col gap-6",
+						width === "full" ? "max-w-none" : "max-w-7xl",
 						className,
 					)}
 					{...props}
