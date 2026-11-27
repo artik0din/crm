@@ -5,6 +5,9 @@ COPY . .
 RUN turbo prune api --docker
 
 FROM oven/bun:1 AS installer
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends python3 make g++ \
+	&& rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/bun.lock ./bun.lock
