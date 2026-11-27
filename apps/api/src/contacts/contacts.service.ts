@@ -105,32 +105,72 @@ export class ContactsService {
 	) {}
 
 	async list(input: ContactListInput): Promise<ListResult<ContactRow>> {
-		const filterableFields = await this.fields.filterableFieldsFor("CONTACT");
+		const [filterableFields, sortField] = await Promise.all([
+			this.fields.filterableFieldsFor("CONTACT"),
+			this.fields.sortableFieldFor("CONTACT", input.sort),
+		]);
 		const where = this.buildWhere(input, filterableFields);
 		const { skip, take } = paginate(input);
 
 		const [rows, total, facetCounts] = await Promise.all([
-			this.db.contact.findMany({
-				where,
-				skip,
-				take,
-				orderBy: resolveOrderBy(input, SORTABLE, [{ createdAt: "desc" }]),
-				select: {
-					id: true,
-					firstName: true,
-					lastName: true,
-					email: true,
-					phone: true,
-					title: true,
-					imageUrl: true,
-					source: true,
-					company: { select: COMPANY_SELECT },
-					owner: { select: OWNER_SELECT },
-					lastActivityAt: true,
-					createdAt: true,
-					archivedAt: true,
-				},
-			}),
+			sortField
+				? this.fields
+						.orderedRecordIds(
+							"CONTACT",
+							where,
+							sortField,
+							input.dir,
+							skip,
+							take,
+						)
+						.then(async (ids) => {
+							if (ids.length === 0) return [];
+							const items = await this.db.contact.findMany({
+								where: { id: { in: ids } },
+								select: {
+									id: true,
+									firstName: true,
+									lastName: true,
+									email: true,
+									phone: true,
+									title: true,
+									imageUrl: true,
+									source: true,
+									company: { select: COMPANY_SELECT },
+									owner: { select: OWNER_SELECT },
+									lastActivityAt: true,
+									createdAt: true,
+									archivedAt: true,
+								},
+							});
+							const byId = new Map(items.map((item) => [item.id, item]));
+							return ids
+								.map((id) => byId.get(id))
+								.filter(
+									(item): item is (typeof items)[number] => item !== undefined,
+								);
+						})
+				: this.db.contact.findMany({
+						where,
+						skip,
+						take,
+						orderBy: resolveOrderBy(input, SORTABLE, [{ createdAt: "desc" }]),
+						select: {
+							id: true,
+							firstName: true,
+							lastName: true,
+							email: true,
+							phone: true,
+							title: true,
+							imageUrl: true,
+							source: true,
+							company: { select: COMPANY_SELECT },
+							owner: { select: OWNER_SELECT },
+							lastActivityAt: true,
+							createdAt: true,
+							archivedAt: true,
+						},
+					}),
 			this.db.contact.count({ where }),
 			this.facetCounts(input, filterableFields),
 		]);
@@ -688,7 +728,7 @@ export class ContactsService {
 			data: { enrichmentStatus: "PENDING", enrichmentError: null },
 		});
 
-		await this.agent.contactCreated(
+		await this.agent.contactRequested(
 			id,
 			contact.linkedinUrl && !contact.imageUrl
 				? "A rep asked for a fresh look — they have a LinkedIn profile on file but no picture"

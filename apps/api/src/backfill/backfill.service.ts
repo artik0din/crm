@@ -5,6 +5,7 @@ import { readWorkspaceIdentity } from "@crm/db/workspace";
 import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import type { Cache } from "cache-manager";
+import { AGENT_DISPATCH } from "../agent/agent-dispatch.config";
 import { AgentTriggerService } from "../agent/agent-trigger.service";
 import { FaviconService } from "../companies/favicon.service";
 import { InjectDatabase } from "../database/database.constants";
@@ -68,18 +69,30 @@ export class BackfillService implements OnModuleInit {
 
 		void (async () => {
 			try {
-				await this.sweepWorkspace();
+				let queued = 0;
+				let remaining = 0;
+				let iconsResolving = 0;
 
-				const companies = await this.runCompanies(false);
-				const contacts = await this.runContacts();
+				if (AGENT_DISPATCH.automaticEnrichment) {
+					await this.sweepWorkspace();
+
+					const companies = await this.runCompanies(false);
+					const contacts = await this.runContacts();
+
+					queued = companies.queued + contacts.queued;
+					remaining = companies.remaining + contacts.remaining;
+					iconsResolving = companies.iconsResolving;
+				} else {
+					iconsResolving = await this.sweepFavicons();
+				}
 
 				const mirrored = await this.images.sweep();
 
 				this.logger.log({
 					message: "Automatic backfill swept",
-					queued: companies.queued + contacts.queued,
-					remaining: companies.remaining + contacts.remaining,
-					iconsResolving: companies.iconsResolving,
+					queued,
+					remaining,
+					iconsResolving,
 					imagesMirrored: mirrored.copied,
 				});
 			} catch (error) {

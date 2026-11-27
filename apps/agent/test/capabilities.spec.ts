@@ -9,7 +9,7 @@ import {
 	unavailable,
 } from "../agent/lib/capabilities";
 
-const KEYS = ["PERPLEXITY_API_KEY", "BLOB_READ_WRITE_TOKEN"] as const;
+const KEYS = ["OPENROUTER_API_KEY", "BLOB_READ_WRITE_TOKEN"] as const;
 
 const saved: Record<string, string | undefined> = {};
 
@@ -30,25 +30,25 @@ afterEach(() => {
 describe("capabilities", () => {
 	it("reports everything off on a bare install", async () => {
 		expect(capabilitiesFrom(null).every((c) => !c.enabled)).toBe(true);
-		expect(await enabled("PERPLEXITY_API_KEY")).toBe(false);
+		expect(await enabled("OPENROUTER_API_KEY")).toBe(false);
 	});
 
 	it("turns one on without turning on the others", async () => {
-		process.env.PERPLEXITY_API_KEY = "pplx-test";
+		process.env.OPENROUTER_API_KEY = "sk-or-test";
 
-		expect(await enabled("PERPLEXITY_API_KEY")).toBe(true);
+		expect(await enabled("OPENROUTER_API_KEY")).toBe(true);
 		expect(await enabled("BLOB_READ_WRITE_TOKEN")).toBe(false);
 	});
 
 	it("treats blank and whitespace as unset", async () => {
-		process.env.PERPLEXITY_API_KEY = "   ";
-		expect(await enabled("PERPLEXITY_API_KEY")).toBe(false);
+		process.env.OPENROUTER_API_KEY = "   ";
+		expect(await enabled("OPENROUTER_API_KEY")).toBe(false);
 	});
 
 	it("is read live, so a late-configured process is not stuck off", async () => {
-		expect(await enabled("PERPLEXITY_API_KEY")).toBe(false);
-		process.env.PERPLEXITY_API_KEY = "key";
-		expect(await enabled("PERPLEXITY_API_KEY")).toBe(true);
+		expect(await enabled("OPENROUTER_API_KEY")).toBe(false);
+		process.env.OPENROUTER_API_KEY = "sk-or-key";
+		expect(await enabled("OPENROUTER_API_KEY")).toBe(true);
 	});
 
 	it("is unknown for a variable that is not a capability", async () => {
@@ -135,7 +135,7 @@ describe("the capability briefing", () => {
 	});
 
 	it("counts a stored Context key as configured", () => {
-		process.env.PERPLEXITY_API_KEY = "key";
+		process.env.OPENROUTER_API_KEY = "sk-or-key";
 
 		const markdown = markdownFor(capabilitiesFrom("ctx"));
 

@@ -1,6 +1,7 @@
 const MINUTE_MS = 60_000;
 
 export const DISPATCH = {
+	automaticEnrichment: false,
 	visible: {
 		batch: 60,
 		concurrency: 6,

@@ -32,6 +32,7 @@ const queued: {
 
 const agent = {
 	contactCreated: async () => undefined,
+	contactRequested: async () => undefined,
 	companyCreated: async () => undefined,
 	companyRequested: async () => undefined,
 	withCrmEvents: withDiscardedCrmEvents,
@@ -682,5 +683,641 @@ describe("queueing a backfill", () => {
 			entity: "CONTACT",
 			keys: ["spec_website"],
 		});
+	});
+});
+
+describe("sorting lists by custom field", () => {
+	it("sorts by NUMBER asc and desc with records lacking a value last, across page boundaries", async () => {
+		const numberField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec followers",
+			type: "NUMBER",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: true,
+			showOnFilter: false,
+		});
+
+		const co1 = await makeCompany("sort-num-1");
+		const co2 = await makeCompany("sort-num-2");
+		const co3 = await makeCompany("sort-num-3");
+		const co4 = await makeCompany("sort-num-4");
+		const co5 = await makeCompany("sort-num-5");
+
+		await fields.applyValues(db, "COMPANY", co1, { [numberField.key]: 10 });
+		await fields.applyValues(db, "COMPANY", co2, { [numberField.key]: 50 });
+		await fields.applyValues(db, "COMPANY", co3, { [numberField.key]: 100 });
+
+		const listInputBase = {
+			q: "sort-num",
+			sort: `field:${numberField.key}`,
+			pageSize: 2,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		};
+
+		const ascP1 = await companies.list({
+			...listInputBase,
+			dir: "asc",
+			page: 1,
+		});
+		const ascP2 = await companies.list({
+			...listInputBase,
+			dir: "asc",
+			page: 2,
+		});
+		const ascP3 = await companies.list({
+			...listInputBase,
+			dir: "asc",
+			page: 3,
+		});
+
+		expect(ascP1.total).toBe(5);
+		expect(ascP1.rows.map((r) => r.id)).toEqual([co1, co2]);
+		expect(ascP2.rows.map((r) => r.id)).toEqual([co3, co5]);
+		expect(ascP3.rows.map((r) => r.id)).toEqual([co4]);
+
+		const descP1 = await companies.list({
+			...listInputBase,
+			dir: "desc",
+			page: 1,
+		});
+		const descP2 = await companies.list({
+			...listInputBase,
+			dir: "desc",
+			page: 2,
+		});
+		const descP3 = await companies.list({
+			...listInputBase,
+			dir: "desc",
+			page: 3,
+		});
+
+		expect(descP1.rows.map((r) => r.id)).toEqual([co3, co2]);
+		expect(descP2.rows.map((r) => r.id)).toEqual([co1, co5]);
+		expect(descP3.rows.map((r) => r.id)).toEqual([co4]);
+	});
+
+	it("sorts by TEXT and CHECKBOX", async () => {
+		const textField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec tag",
+			type: "TEXT",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: true,
+			showOnFilter: false,
+		});
+
+		const boolField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec vip",
+			type: "CHECKBOX",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: true,
+			showOnFilter: false,
+		});
+
+		const coA = await makeCompany("sort-tc-a");
+		const coB = await makeCompany("sort-tc-b");
+		const coC = await makeCompany("sort-tc-c");
+
+		await fields.applyValues(db, "COMPANY", coA, {
+			[textField.key]: "Apple",
+			[boolField.key]: false,
+		});
+		await fields.applyValues(db, "COMPANY", coB, {
+			[textField.key]: "Banana",
+			[boolField.key]: true,
+		});
+
+		const textAsc = await companies.list({
+			q: "sort-tc",
+			sort: `field:${textField.key}`,
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+		expect(textAsc.rows.map((r) => r.id)).toEqual([coA, coB, coC]);
+
+		const textDesc = await companies.list({
+			q: "sort-tc",
+			sort: `field:${textField.key}`,
+			dir: "desc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+		expect(textDesc.rows.map((r) => r.id)).toEqual([coB, coA, coC]);
+
+		const boolAsc = await companies.list({
+			q: "sort-tc",
+			sort: `field:${boolField.key}`,
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+		expect(boolAsc.rows.map((r) => r.id)).toEqual([coA, coB, coC]);
+
+		const boolDesc = await companies.list({
+			q: "sort-tc",
+			sort: `field:${boolField.key}`,
+			dir: "desc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+		expect(boolDesc.rows.map((r) => r.id)).toEqual([coB, coA, coC]);
+	});
+
+	it("falls back to default order for unknown field key or non-table field", async () => {
+		const coX = await makeCompany("sort-fb-1");
+		const coY = await makeCompany("sort-fb-2");
+
+		const unknownSort = await companies.list({
+			q: "sort-fb",
+			sort: "field:nonexistent_key",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+		expect(unknownSort.rows.map((r) => r.id)).toEqual([coY, coX]);
+	});
+
+	it("orders unvalued records stably with id desc tiebreaker across page boundaries when createdAt matches", async () => {
+		const numberField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec stable tie",
+			type: "NUMBER",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: true,
+			showOnFilter: false,
+		});
+
+		const co1 = await makeCompany("sort-stable-1");
+		const co2 = await makeCompany("sort-stable-2");
+		const fixedDate = new Date("2026-06-01T12:00:00.000Z");
+
+		await db.company.update({
+			where: { id: co1 },
+			data: { createdAt: fixedDate },
+		});
+		await db.company.update({
+			where: { id: co2 },
+			data: { createdAt: fixedDate },
+		});
+
+		const [expectedFirst, expectedSecond] = co1 > co2 ? [co1, co2] : [co2, co1];
+
+		const p1 = await companies.list({
+			q: "sort-stable",
+			sort: `field:${numberField.key}`,
+			dir: "asc",
+			page: 1,
+			pageSize: 1,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+
+		const p2 = await companies.list({
+			q: "sort-stable",
+			sort: `field:${numberField.key}`,
+			dir: "asc",
+			page: 2,
+			pageSize: 1,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+
+		expect(p1.total).toBe(2);
+		expect(p1.rows.map((r) => r.id)).toEqual([expectedFirst]);
+		expect(p2.rows.map((r) => r.id)).toEqual([expectedSecond]);
+	});
+});
+
+describe("filtering lists by custom field", () => {
+	it("counts NUMBER buckets and filters with two buckets, ignoring unknown bucket ids", async () => {
+		const numField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec arr",
+			type: "NUMBER",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: false,
+			showOnFilter: true,
+		});
+
+		const co1 = await makeCompany("filt-num-1");
+		const co2 = await makeCompany("filt-num-2");
+		const co3 = await makeCompany("filt-num-3");
+		const co4 = await makeCompany("filt-num-4");
+		const co5 = await makeCompany("filt-num-5");
+
+		await fields.applyValues(db, "COMPANY", co1, { [numField.key]: 500 });
+		await fields.applyValues(db, "COMPANY", co2, { [numField.key]: 5000 });
+		await fields.applyValues(db, "COMPANY", co3, { [numField.key]: 25000 });
+		await fields.applyValues(db, "COMPANY", co4, { [numField.key]: 75000 });
+		await fields.applyValues(db, "COMPANY", co5, { [numField.key]: 150000 });
+
+		const initial = await companies.list({
+			q: "filt-num",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+
+		const counts = initial.facetCounts[`field:${numField.key}`];
+		expect(counts?.["lt:1000"]).toBe(1);
+		expect(counts?.["1000:10000"]).toBe(1);
+		expect(counts?.["10000:50000"]).toBe(1);
+		expect(counts?.["50000:100000"]).toBe(1);
+		expect(counts?.["gte:100000"]).toBe(1);
+
+		const filtered = await companies.list({
+			q: "filt-num",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {
+				[numField.key]: ["lt:1000", "10000:50000", "unknown:bucket"],
+			},
+			archived: false,
+		});
+
+		expect(filtered.total).toBe(2);
+		expect(filtered.rows.map((r) => r.id).sort()).toEqual([co1, co3].sort());
+	});
+
+	it("filters by CHECKBOX field", async () => {
+		const boolField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec active partner",
+			type: "CHECKBOX",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: false,
+			showOnFilter: true,
+		});
+
+		const coYes = await makeCompany("filt-chk-yes");
+		const coNo = await makeCompany("filt-chk-no");
+
+		await fields.applyValues(db, "COMPANY", coYes, { [boolField.key]: true });
+		await fields.applyValues(db, "COMPANY", coNo, { [boolField.key]: false });
+
+		const initial = await companies.list({
+			q: "filt-chk",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+
+		const counts = initial.facetCounts[`field:${boolField.key}`];
+		expect(counts?.true).toBe(1);
+		expect(counts?.false).toBe(1);
+
+		const onlyYes = await companies.list({
+			q: "filt-chk",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: { [boolField.key]: ["true"] },
+			archived: false,
+		});
+		expect(onlyYes.rows.map((r) => r.id)).toEqual([coYes]);
+
+		const onlyNo = await companies.list({
+			q: "filt-chk",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: { [boolField.key]: ["false"] },
+			archived: false,
+		});
+		expect(onlyNo.rows.map((r) => r.id)).toEqual([coNo]);
+	});
+
+	it("counts TEXT facets most frequent first and filters by text in", async () => {
+		const textField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec hq city",
+			type: "TEXT",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: false,
+			showOnFilter: true,
+		});
+
+		const coP1 = await makeCompany("filt-txt-p1");
+		const coP2 = await makeCompany("filt-txt-p2");
+		const coP3 = await makeCompany("filt-txt-p3");
+		const coL1 = await makeCompany("filt-txt-l1");
+		const coL2 = await makeCompany("filt-txt-l2");
+		const coT1 = await makeCompany("filt-txt-t1");
+
+		await fields.applyValues(db, "COMPANY", coP1, { [textField.key]: "Paris" });
+		await fields.applyValues(db, "COMPANY", coP2, { [textField.key]: "Paris" });
+		await fields.applyValues(db, "COMPANY", coP3, { [textField.key]: "Paris" });
+		await fields.applyValues(db, "COMPANY", coL1, {
+			[textField.key]: "London",
+		});
+		await fields.applyValues(db, "COMPANY", coL2, {
+			[textField.key]: "London",
+		});
+		await fields.applyValues(db, "COMPANY", coT1, { [textField.key]: "Tokyo" });
+
+		const initial = await companies.list({
+			q: "filt-txt",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+
+		const counts = initial.facetCounts[`field:${textField.key}`];
+		expect(counts).toEqual({ Paris: 3, London: 2, Tokyo: 1 });
+
+		const filtered = await companies.list({
+			q: "filt-txt",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: { [textField.key]: ["London", "Tokyo"] },
+			archived: false,
+		});
+
+		expect(filtered.total).toBe(3);
+		expect(filtered.rows.map((r) => r.id).sort()).toEqual(
+			[coL1, coL2, coT1].sort(),
+		);
+	});
+
+	it("bounds TEXT facets to the configured cap ordered by frequency", async () => {
+		const textField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec cap domain",
+			type: "TEXT",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: false,
+			showOnFilter: true,
+		});
+
+		const coTop1 = await makeCompany("filt-cap-top1");
+		const coTop2 = await makeCompany("filt-cap-top2");
+		await fields.applyValues(db, "COMPANY", coTop1, {
+			[textField.key]: "TopChoice",
+		});
+		await fields.applyValues(db, "COMPANY", coTop2, {
+			[textField.key]: "TopChoice",
+		});
+
+		for (let i = 0; i < 55; i++) {
+			const co = await makeCompany(`filt-cap-${i}`);
+			await fields.applyValues(db, "COMPANY", co, {
+				[textField.key]: `Value-${i}`,
+			});
+		}
+
+		const result = await companies.list({
+			q: "filt-cap",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: {},
+			archived: false,
+		});
+
+		const counts = result.facetCounts[`field:${textField.key}`];
+		expect(counts).toBeDefined();
+		expect(Object.keys(counts ?? {}).length).toBe(50);
+		expect(counts?.["TopChoice"]).toBe(2);
+	});
+
+	it("matches nothing when field filter contains only unknown option, bucket, or boolean ids", async () => {
+		const numField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec unk num",
+			type: "NUMBER",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: false,
+			showOnFilter: true,
+		});
+
+		const selectField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec unk sel",
+			type: "SELECT",
+			options: [{ label: "Choice A" }],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: false,
+			showOnFilter: true,
+		});
+
+		const boolField = await fields.create({
+			entity: "COMPANY",
+			label: "Spec unk chk",
+			type: "CHECKBOX",
+			options: [],
+			agentFilled: false,
+			agentBrief: null,
+			required: false,
+			showOnSheet: true,
+			showOnTable: false,
+			showOnFilter: true,
+		});
+
+		const co = await makeCompany("filt-unk-match");
+		const optionId = selectField.options[0]?.id as string;
+		await fields.applyValues(db, "COMPANY", co, {
+			[numField.key]: 500,
+			[selectField.key]: optionId,
+			[boolField.key]: true,
+		});
+
+		const unknownBucket = await companies.list({
+			q: "filt-unk-match",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: { [numField.key]: ["unknown:bucket"] },
+			archived: false,
+		});
+		expect(unknownBucket.total).toBe(0);
+		expect(unknownBucket.rows).toEqual([]);
+
+		const unknownOption = await companies.list({
+			q: "filt-unk-match",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: { [selectField.key]: ["nonexistent-option-id"] },
+			archived: false,
+		});
+		expect(unknownOption.total).toBe(0);
+		expect(unknownOption.rows).toEqual([]);
+
+		const unknownBool = await companies.list({
+			q: "filt-unk-match",
+			sort: "",
+			dir: "asc",
+			page: 1,
+			pageSize: 10,
+			industry: [],
+			enrichment: [],
+			source: [],
+			owner: [],
+			activity: [],
+			fields: { [boolField.key]: ["maybe"] },
+			archived: false,
+		});
+		expect(unknownBool.total).toBe(0);
+		expect(unknownBool.rows).toEqual([]);
 	});
 });

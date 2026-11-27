@@ -131,7 +131,7 @@ export class WorkspaceService {
 		this.logger.log({ message: "Workspace updated", userId });
 
 		if (website !== before?.website) {
-			await this.agent.workspaceChanged(
+			await this.agent.workspaceRequested(
 				website,
 				before?.website
 					? "The company using this CRM changed its website"
