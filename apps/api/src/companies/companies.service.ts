@@ -82,42 +82,92 @@ export class CompaniesService {
 	) {}
 
 	async list(input: CompanyListInput): Promise<ListResult<CompanyRow>> {
-		const filterableFields = await this.fields.filterableFieldsFor("COMPANY");
+		const [filterableFields, sortField] = await Promise.all([
+			this.fields.filterableFieldsFor("COMPANY"),
+			this.fields.sortableFieldFor("COMPANY", input.sort),
+		]);
 		const where = this.buildWhere(input, filterableFields);
 		const { skip, take } = paginate(input);
 
 		const [rows, total, facetCounts] = await Promise.all([
-			this.db.company.findMany({
-				where,
-				skip,
-				take,
-				orderBy: resolveOrderBy(input, SORTABLE, {
-					createdAt: "desc",
-				}),
-				select: {
-					id: true,
-					name: true,
-					domain: true,
-					iconUrl: true,
-					iconDarkUrl: true,
-					iconTone: true,
-					logoUrl: true,
-					brandColor: true,
-					industry: true,
-					enrichmentStatus: true,
-					source: true,
-					owner: { select: OWNER_SELECT },
-					_count: {
+			sortField
+				? this.fields
+						.orderedRecordIds(
+							"COMPANY",
+							where,
+							sortField,
+							input.dir,
+							skip,
+							take,
+						)
+						.then(async (ids) => {
+							if (ids.length === 0) return [];
+							const items = await this.db.company.findMany({
+								where: { id: { in: ids } },
+								select: {
+									id: true,
+									name: true,
+									domain: true,
+									iconUrl: true,
+									iconDarkUrl: true,
+									iconTone: true,
+									logoUrl: true,
+									brandColor: true,
+									industry: true,
+									enrichmentStatus: true,
+									source: true,
+									owner: { select: OWNER_SELECT },
+									_count: {
+										select: {
+											contacts: true,
+											deals: {
+												where: { stage: { in: [...OPEN_DEAL_STAGES] } },
+											},
+										},
+									},
+									lastActivityAt: true,
+									createdAt: true,
+									archivedAt: true,
+								},
+							});
+							const byId = new Map(items.map((item) => [item.id, item]));
+							return ids
+								.map((id) => byId.get(id))
+								.filter(
+									(item): item is (typeof items)[number] => item !== undefined,
+								);
+						})
+				: this.db.company.findMany({
+						where,
+						skip,
+						take,
+						orderBy: resolveOrderBy(input, SORTABLE, {
+							createdAt: "desc",
+						}),
 						select: {
-							contacts: true,
-							deals: { where: { stage: { in: [...OPEN_DEAL_STAGES] } } },
+							id: true,
+							name: true,
+							domain: true,
+							iconUrl: true,
+							iconDarkUrl: true,
+							iconTone: true,
+							logoUrl: true,
+							brandColor: true,
+							industry: true,
+							enrichmentStatus: true,
+							source: true,
+							owner: { select: OWNER_SELECT },
+							_count: {
+								select: {
+									contacts: true,
+									deals: { where: { stage: { in: [...OPEN_DEAL_STAGES] } } },
+								},
+							},
+							lastActivityAt: true,
+							createdAt: true,
+							archivedAt: true,
 						},
-					},
-					lastActivityAt: true,
-					createdAt: true,
-					archivedAt: true,
-				},
-			}),
+					}),
 			this.db.company.count({ where }),
 			this.facetCounts(input, filterableFields),
 		]);

@@ -112,7 +112,10 @@ export class DealsService {
 	) {}
 
 	async list(input: DealListInput) {
-		const filterableFields = await this.fields.filterableFieldsFor("DEAL");
+		const [filterableFields, sortField] = await Promise.all([
+			this.fields.filterableFieldsFor("DEAL"),
+			this.fields.sortableFieldFor("DEAL", input.sort),
+		]);
 		const where = this.buildWhere(input, filterableFields);
 		const { skip, take } = paginate(input);
 
@@ -121,27 +124,58 @@ export class DealsService {
 
 		const [rows, total, facetCounts, openValue, unconverted] =
 			await Promise.all([
-				this.db.deal.findMany({
-					where,
-					skip,
-					take,
-					orderBy: resolveOrderBy(input, SORTABLE, [{ createdAt: "desc" }]),
-					select: {
-						id: true,
-						name: true,
-						stage: true,
-						amount: true,
-						currency: true,
-						baseAmount: true,
-						expectedCloseDate: true,
-						closedAt: true,
-						company: { select: COMPANY_SELECT },
-						owner: { select: OWNER_SELECT },
-						lastActivityAt: true,
-						createdAt: true,
-						archivedAt: true,
-					},
-				}),
+				sortField
+					? this.fields
+							.orderedRecordIds("DEAL", where, sortField, input.dir, skip, take)
+							.then(async (ids) => {
+								if (ids.length === 0) return [];
+								const items = await this.db.deal.findMany({
+									where: { id: { in: ids } },
+									select: {
+										id: true,
+										name: true,
+										stage: true,
+										amount: true,
+										currency: true,
+										baseAmount: true,
+										expectedCloseDate: true,
+										closedAt: true,
+										company: { select: COMPANY_SELECT },
+										owner: { select: OWNER_SELECT },
+										lastActivityAt: true,
+										createdAt: true,
+										archivedAt: true,
+									},
+								});
+								const byId = new Map(items.map((item) => [item.id, item]));
+								return ids
+									.map((id) => byId.get(id))
+									.filter(
+										(item): item is (typeof items)[number] =>
+											item !== undefined,
+									);
+							})
+					: this.db.deal.findMany({
+							where,
+							skip,
+							take,
+							orderBy: resolveOrderBy(input, SORTABLE, [{ createdAt: "desc" }]),
+							select: {
+								id: true,
+								name: true,
+								stage: true,
+								amount: true,
+								currency: true,
+								baseAmount: true,
+								expectedCloseDate: true,
+								closedAt: true,
+								company: { select: COMPANY_SELECT },
+								owner: { select: OWNER_SELECT },
+								lastActivityAt: true,
+								createdAt: true,
+								archivedAt: true,
+							},
+						}),
 				this.db.deal.count({ where }),
 				this.facetCounts(input, filterableFields),
 				this.db.deal.aggregate({

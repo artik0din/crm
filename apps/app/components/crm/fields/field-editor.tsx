@@ -5,6 +5,7 @@ import Close from "@carbon/icons-react/es/Close";
 import {
 	FIELD_TYPES,
 	fieldKeyFromLabel,
+	isFilterableFieldType,
 	typeLabel,
 } from "@crm/db/fields-shape";
 import {
@@ -223,7 +224,7 @@ export function FieldEditor({
 
 	const key = field?.key ?? fieldKeyFromLabel(draft.label);
 	const saving = create.isPending || update.isPending;
-	const filterable = draft.type === "SELECT" || draft.type === "USER";
+	const filterable = isFilterableFieldType(draft.type);
 
 	const save = () => {
 		const payload = {

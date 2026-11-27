@@ -3,11 +3,16 @@ import {
 	attachValues,
 	coerceValue,
 	columnFor,
+	FILTERABLE_FIELD_TYPES,
 	type FieldDefinitionWithOptions,
 	FieldValueError,
 	fieldKeyFromLabel,
+	isFilterableFieldType,
+	isSortableFieldType,
+	NUMBER_BUCKETS,
 	readValue,
 	recordColumn,
+	SORTABLE_FIELD_TYPES,
 	serializeField,
 } from "../src/fields";
 import type { FieldValueModel } from "../src/generated/prisma/models";
@@ -228,5 +233,35 @@ describe("attachValues", () => {
 		expect(fields.map((field) => field.key)).toEqual(["runs_on", "seats"]);
 		expect(fields[0]?.value).toBe("AWS");
 		expect(fields[1]?.value).toBeNull();
+	});
+});
+
+describe("filterable and sortable field types", () => {
+	it("identifies filterable types and excludes unsupported ones", () => {
+		for (const type of FILTERABLE_FIELD_TYPES) {
+			expect(isFilterableFieldType(type)).toBe(true);
+		}
+		expect(isFilterableFieldType("DATE")).toBe(false);
+		expect(isFilterableFieldType("LONG_TEXT")).toBe(false);
+	});
+
+	it("identifies sortable types and excludes unsupported ones", () => {
+		for (const type of SORTABLE_FIELD_TYPES) {
+			expect(isSortableFieldType(type)).toBe(true);
+		}
+		expect(isSortableFieldType("DATE")).toBe(false);
+		expect(isSortableFieldType("SELECT")).toBe(false);
+		expect(isSortableFieldType("USER")).toBe(false);
+	});
+
+	it("provides valid number bucket definitions", () => {
+		expect(NUMBER_BUCKETS.length).toBe(5);
+		expect(NUMBER_BUCKETS.map((b) => b.id)).toEqual([
+			"lt:1000",
+			"1000:10000",
+			"10000:50000",
+			"50000:100000",
+			"gte:100000",
+		]);
 	});
 });
